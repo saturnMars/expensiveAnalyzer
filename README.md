@@ -14,7 +14,8 @@
 3. Modificare l'anno di partenza delle statistiche (cutOffYear) nel file *./app.py*
 
 ## Utilizzo
-1. Scaricare la lista movimenti in formato CSV dal portale inbank: Ultimi Movimenti > Movimenti conto (.csv) 
-2. Eseguire il file *./spese.bat* 
-    - Il programma importerà la transazione contenute nel file "ListaMovimentiCsv..." e le salverà incrementalmente file *./data/transactions.xlsx*
+1. Scaricare la lista movimenti in formato CSV dal portale inbank: "Ultimi Movimenti" > "Movimenti conto (.csv)"
+   - Per statistiche più complete selezionare un periodo ampio (ad es.: transazioni degli ultimi tre mesi/ultimo anno)
+3. Eseguire il file *./spese.bat* 
+    - Il programma importerà la transazione contenute nel file "ListaMovimentiCsv..." e le salverà nel file incrementale *./data/transactions.xlsx*
     - Genererà statistiche tabulari (excel files) e visuali (grafici) nella cartella *./outputs*s
