@@ -85,9 +85,13 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
                     lambda df_row: round(-df_row['IMPORTO'] - budget[df_row.name], 0), axis = 1))
                 partial_df.insert(loc = 3, column = 'Δ Budget (%)', value = partial_df.apply(
                     lambda df_row: df_row['Δ Budget'] / budget[df_row.name] if budget[df_row.name] > 0 else 1, axis = 1))
-        
-                partial_df.loc['_TOTAL'] = {'IMPORTO': partial_df['IMPORTO'].sum(), 'Δ Budget' : partial_df['Δ Budget'].sum(),
-                                            'Δ Budget (%)': partial_df['Δ Budget'].sum() / np.sum(list(budget.values()))}
+
+                partial_df.loc['_TOTAL', 'IMPORTO'] = partial_df['IMPORTO'].sum()
+                partial_df.loc['_TOTAL', 'Δ Budget'] = partial_df['Δ Budget'].sum()
+                
+                totalBudget = np.sum(list(budget.values()))
+                if totalBudget > 0:
+                    partial_df.loc['_TOTAL', 'Δ Budget (%)'] = partial_df['Δ Budget'].sum() / totalBudget 
             
             # Save the sheet
             sheetName = month.strftime('%B %Y')
