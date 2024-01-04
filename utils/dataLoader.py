@@ -4,24 +4,20 @@ from json import load
 import shutil
 
 def importTransactionFile(projectFolder, importPath):
-    print(importPath)
-    
     if not path.exists(importPath):
-        print(f"\n[WARNING] The import path does not exist! {importPath}\n--> (A) Change che import path in the app.py file.\n--> (B) Put the file into the ./data folder.\n")
+        print(f"\n[WARNING] The import path does not exist! {importPath} --> (A) Change che import path in the app.py file.--> (B) Put the file into the ./data folder.\n")
         return False
 
     for fileName in listdir(importPath):
         if  fileName.endswith('.csv') and 'listamovimenti' in fileName.lower():
 
             # Move the file
-            shutil.move(src = path.join(importPath, fileName), dst = path.join(projectFolder, 'data'))
-
-            print("--> Imported file:", fileName, "\n")
-
-            # Rename the file
-            #rename(src = path.join(folderPath, fileName), dst = path.join(folderPath, 'movements.csv'))
-
-            return True
+            try:
+                shutil.move(src = path.join(importPath, fileName), dst = path.join(projectFolder, 'data'))
+                print("--> Imported file:", fileName, "\n")
+                return True
+            except shutil.Error:
+                return False
     return False
 
 def loadTransactions(projectFolder, outputfileName = 'transactions.xlsx'):
