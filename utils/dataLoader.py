@@ -1,7 +1,19 @@
 import pandas as pd
-from os import path, listdir, remove
+from os import path, listdir, remove, makedirs
 from json import load
 import shutil
+
+def initFolders(projectFolder):
+    dataFolder = path.join(projectFolder, 'data')
+    if not path.exists(dataFolder):
+        makedirs(dataFolder)
+
+    outputFolder = path.join(projectFolder, 'outputs')
+    graphFolder = path.join(outputFolder, 'graphs')
+    if not path.exists(graphFolder):
+        makedirs(graphFolder)
+
+    return dataFolder, outputFolder, graphFolder
 
 def importTransactionFile(projectFolder, importPath):
     if not path.exists(importPath):
@@ -27,6 +39,7 @@ def loadTransactions(projectFolder, outputfileName = 'transactions.xlsx'):
 
     # Import the main dataframe
     dataFolder = path.join(projectFolder, 'data')
+    
     folderFiles = listdir(dataFolder)
     if outputfileName in folderFiles:
 
@@ -66,7 +79,7 @@ def loadTransactions(projectFolder, outputfileName = 'transactions.xlsx'):
 def importTransactions(projectFolder):
 
     dataFolder = path.join(projectFolder, 'data')
-     
+        
     # Scan the folder
     folderFiles = listdir(dataFolder)
 

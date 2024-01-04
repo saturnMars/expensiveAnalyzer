@@ -7,21 +7,16 @@ cutOffYear = 2023
 
 if __name__ == '__main__':
 
+    # Init folders
     projectFolder = path.dirname(__file__)
-    language = getlocale()[0].split('_')[0]
+    dataFolder, outputFolder, graphFolder = dataLoader.initFolders(projectFolder)
 
     # Import transaction file
-    importPath = path.join(Path.home(), "Download" if language == 'it' else "Downloads")
+    importPath = path.join(Path.home(), "Download" if getlocale()[0].split('_')[0] == 'it' else "Downloads") 
     dataLoader.importTransactionFile(projectFolder, importPath)
 
     # Read movements
     df = dataLoader.loadTransactions(projectFolder)
-
-    # Create the output folder
-    outputFolder = path.join(projectFolder, 'outputs')
-    graphFolder = path.join(outputFolder, 'graphs')
-    if not path.exists(graphFolder):
-        makedirs(graphFolder)
 
     # Compute income stats
     stats.computeIncomes(df.copy(), outputFolder = outputFolder)
