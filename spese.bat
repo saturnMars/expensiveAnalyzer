@@ -1,1 +1,1 @@
-python app.py & start "" "outputs" & cmd /k
+py app.py & start "" "outputs" & cmd /k
