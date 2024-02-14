@@ -36,7 +36,7 @@ def loadTransactions(projectFolder, outputfileName = 'transactions.xlsx'):
 
     # Attach new transactions
     df = importTransactions(projectFolder)
-
+    
     # Import the main dataframe
     dataFolder = path.join(projectFolder, 'data')
     
@@ -44,7 +44,10 @@ def loadTransactions(projectFolder, outputfileName = 'transactions.xlsx'):
     if outputfileName in folderFiles:
 
         # Load the excel file
-        main_df = pd.read_excel(path.join(dataFolder, outputfileName))
+        main_df = pd.read_excel(path.join(dataFolder, outputfileName)) 
+
+        # Upload the categories
+        main_df = addExpensiveCategories(main_df, folderData = path.join(projectFolder, 'taxonomies'))
 
         # Merge the dataframes
         df = pd.concat([main_df, df]).drop_duplicates(subset=['VALUTA', 'IMPORTO']).reset_index(drop = True)
@@ -53,7 +56,7 @@ def loadTransactions(projectFolder, outputfileName = 'transactions.xlsx'):
         raise Exception('No data! Neither in the DATA folder nor in the DOWNLOAD folder.\n')
 
     # Sort the new dataframe
-    df = df.sort_values(by = ['VALUTA'], ascending= False)
+    df = df.sort_values(by = ['VALUTA', 'DATA'], ascending = False)
 
     # Create the month column 
     df['MESE'] = df['VALUTA'].dt.to_period('M') #.strftime('%B %Y')
@@ -71,7 +74,26 @@ def loadTransactions(projectFolder, outputfileName = 'transactions.xlsx'):
            remove(file_path)
 
     # Save the dataframe
-    df.to_excel(path.join(dataFolder, f"transactions.xlsx"), index = False, sheet_name = 'Transactions', freeze_panes = (1,1))
+    with pd.ExcelWriter(path.join(dataFolder, f"transactions.xlsx"),  engine = 'xlsxwriter', datetime_format="d mmm yyyy") as excelFile:
+        df.to_excel(excelFile, index = False, sheet_name = 'Transactions', freeze_panes = (1,1))
+        
+        # Graphical settings
+        grey_format = excelFile.book.add_format({'bg_color': '#EEEEEE'})
+        white_format = excelFile.book.add_format({'bg_color': '#FFFFFF'})
+        for idk_row in range(1, len(df)):
+            excelFile.sheets['Transactions'].set_row(idk_row, cell_format = white_format if idk_row % 2 ==0 else grey_format)
+
+        excelFile.sheets['Transactions'].conditional_format('E1:E999', {'type': '3_color_scale', 
+                                                                        'min_type': 'percentile', 'min_value': 5, 'min_color': "#EF5350", 
+                                                                        'mid_color': "white", 'mid_type': 'num', 'mid_value': 0, 
+                                                                        'max_color': "#4CAF50"})
+        excelFile.sheets['Transactions'].autofit()
+        excelFile.sheets['Transactions'].set_column(first_col = 0, last_col = 0, options = {"hidden": True})
+        excelFile.sheets['Transactions'].set_column(first_col = 2, last_col = 2, options = {"hidden": True})
+        excelFile.sheets['Transactions'].set_column(first_col = 1, last_col = 1, width = 11)
+        excelFile.sheets['Transactions'].set_column(first_col = 5, last_col = 5, width = 50)
+ 
+        excelFile.sheets['Transactions'].autofilter('A1:J9999')
 
     return df
 
@@ -97,6 +119,7 @@ def importTransactions(projectFolder):
 
     # Parse the data
     df['DATA'] = pd.to_datetime(df['DATA'], dayfirst=True)
+    df['VALUTA'] = pd.to_datetime(df['VALUTA'], dayfirst=True)
 
     # Modify the numerical representation
     for col in ['AVERE', 'DARE']:
@@ -129,9 +152,7 @@ def mapAbiCodes(df, folderData):
     try:
         df['CAUSALE ABI'] = df['CAUSALE ABI'].map(lambda code: causaliAbi[str(code)] if not pd.isna(code) else "")
     except KeyError as e:
-        print('Missing taxonomy for ABI code:', e)
-        raise Exception()
-
+        raise Exception(f"Missing taxonomy for ABI code: {e}\n")
     return df
 
 
@@ -154,7 +175,8 @@ def addExpensiveCategories(df, folderData):
     expensiveMapping = {expensive: cat for cat, expList in expensiveCategories.items() for expensive in expList}
 
     # Map the expensive
-    df.loc[df['IMPORTO'] < 0, 'CATEGORIA'] = df.loc[df['IMPORTO'] < 0,'DESCRIZIONE OPERAZIONE'].map(lambda desc: mapExpensives(expensiveMapping, desc))
+    expensiveFilter = df['IMPORTO'] < 0
+    df.loc[expensiveFilter, 'CATEGORIA'] = df.loc[expensiveFilter,'DESCRIZIONE OPERAZIONE'].map(lambda desc: mapExpensives(expensiveMapping, desc))
     return df
 
 def cleanDescription(desc):
@@ -202,13 +224,4 @@ def loadBudget():
     folderData = path.join(path.dirname(__file__), '..', 'taxonomies')
     budget = pd.read_excel(path.join(folderData, 'budget.xlsx'), sheet_name='Budget', index_col = 0, usecols = [0,1])
     budget = budget['BUDGET'].astype('int').to_dict()
-    return budget
-
-def saveDataframe(df, outputFolder = 'data'):
-
-    # Reorder columns
-    df = df[df.columns[:2] + df.columns[3:] + 'DESCRIZIONE OPERAZIONE']
-
-    print(df.iloc[0])
-
-    
+    return budget    

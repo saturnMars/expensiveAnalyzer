@@ -3,7 +3,7 @@ from utils import dataLoader, stats
 from pathlib import Path
 from locale import getlocale
 
-cutOffYear = 2023
+cutOffYear = 2024
 
 if __name__ == '__main__':
 

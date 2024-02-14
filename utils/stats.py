@@ -1,11 +1,14 @@
-import pandas as pd
 from os import path
 from collections import Counter
+import pandas as pd
+import numpy as np
 
+# LOCAL IMPORTS
 from utils import graphs
 from utils.dataLoader import loadBudget
 
-import numpy as np
+
+CUTOFF_CASH_AMOUNT = 2833.96 # 01 January 2024
 
 def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes = False, cutoff_year = None, verbose = False): 
 
@@ -18,13 +21,11 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
     if cutoff_year != None:
         df = df[df['ANNO'] >= cutoff_year]
 
-    # (1) Group expensives by month
-    expensivesByMonth = df[['MESE', 'IMPORTO', 'DESC', '#', feature]].groupby(by = ['MESE', feature], as_index = True).sum()
-
-
     # (1.a) Add expensives by description
     groupedByDesc = df[['DESC', 'IMPORTO', 'MESE']].groupby(by = ['DESC', 'MESE']).sum()
 
+    # (1) Group expensives by month
+    expensivesByMonth = df[['MESE', 'IMPORTO', 'DESC', '#', feature]].groupby(by = ['MESE', feature], as_index = True).sum()    # 
     expensivesByMonth['OPERAZIONI'] = expensivesByMonth['DESC'].str.split('!').map(
         lambda items: [item for item in items if item != ""] if isinstance(items, list) else items)
     expensivesByMonth['OPERAZIONI'] = expensivesByMonth['OPERAZIONI'].map(Counter).map(Counter.items)
@@ -35,6 +36,7 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
     expensivesByMonth['OPERAZIONI'] = expensivesByMonth['OPERAZIONI'].map(
         lambda items: '\n '.join([item[0] + (f" (x{item[1]}, " if item[1] > 1 else ' (') + str(int(item[2]) if item[2] >= 1 else item[2]) + " €)"
                                    for item in items]))
+    
     expensivesByMonth = expensivesByMonth.drop(columns = ['DESC']).sort_index(ascending = False)
 
     # (2) Group expensives by code
@@ -52,10 +54,13 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
     # (2.c) Add budget
     if feature == 'CATEGORIA':
         budget = loadBudget()
-        groupedByCategory['Δ Budget'] = groupedByCategory.apply(lambda df_row: round(- df_row['IMPORTO'] - (budget[df_row.name[0]] * 3), 0) , axis = 1)
-        groupedByCategory['Δ Budget (%)'] = groupedByCategory.apply(
-            lambda df_row: df_row['Δ Budget'] / (budget[df_row.name[0]] * 3) if budget[df_row.name[0]] > 0 else 1, axis = 1)
-
+        try:
+            groupedByCategory['Δ Budget'] = groupedByCategory.apply(lambda df_row: round(- df_row['IMPORTO'] - (budget[df_row.name[0]] * 3), 0) , axis = 1)
+            groupedByCategory['Δ Budget (%)'] = groupedByCategory.apply(
+                lambda df_row: df_row['Δ Budget'] / (budget[df_row.name[0]] * 3) if budget[df_row.name[0]] > 0 else 1, axis = 1)
+        except KeyError as missingBudgetCategory:
+            raise Exception(f'\n{missingBudgetCategory} is not in the budget! Please include it in the budget file.\n')
+        
     # Save the excel file
     fileName = 'expensiveBy' + ('AbiCode' if feature == "CAUSALE ABI" else 'Category') + '.xlsx'
     with pd.ExcelWriter(path.join(outputFolder, fileName), engine = 'xlsxwriter') as excelFile:
@@ -85,13 +90,9 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
                     lambda df_row: round(-df_row['IMPORTO'] - budget[df_row.name], 0), axis = 1))
                 partial_df.insert(loc = 3, column = 'Δ Budget (%)', value = partial_df.apply(
                     lambda df_row: df_row['Δ Budget'] / budget[df_row.name] if budget[df_row.name] > 0 else 1, axis = 1))
-
-                partial_df.loc['_TOTAL', 'IMPORTO'] = partial_df['IMPORTO'].sum()
-                partial_df.loc['_TOTAL', 'Δ Budget'] = partial_df['Δ Budget'].sum()
-                
-                totalBudget = np.sum(list(budget.values()))
-                if totalBudget > 0:
-                    partial_df.loc['_TOTAL', 'Δ Budget (%)'] = partial_df['Δ Budget'].sum() / totalBudget 
+        
+                partial_df.loc['_TOTAL'] = {'IMPORTO': partial_df['IMPORTO'].sum(), 'Δ Budget' : partial_df['Δ Budget'].sum(),
+                                            'Δ Budget (%)': partial_df['Δ Budget'].sum() / np.sum(list(budget.values()))}
             
             # Save the sheet
             sheetName = month.strftime('%B %Y')
@@ -102,13 +103,15 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
             excelFile.sheets[sheetName].set_column('C:C', width = 5, cell_format = perc_fmt)
             excelFile.sheets[sheetName].set_column('A:A', width = 20)
             excelFile.sheets[sheetName].set_column(first_col = len(partial_df.columns), last_col =len(partial_df.columns), width = 150)
+            excelFile.sheets[sheetName].conditional_format(0, 1, len(partial_df) -1, 1, {
+                    'type': '2_color_scale', 'min_color': '#E53935', 'max_color': '#EF9A9A'})
 
             if feature == 'CATEGORIA':
                 excelFile.sheets[sheetName].set_column('D:D', width = 8, cell_format = euro_fmt)
                 excelFile.sheets[sheetName].set_column('E:E', width = 12, cell_format = perc_fmt)
-                excelFile.sheets[sheetName].conditional_format(f'D1:D{len(partial_df) -1}', {
+                excelFile.sheets[sheetName].conditional_format(f'D1:D{len(partial_df)}', {
                     'type': '3_color_scale', 'min_color': "#4CAF50",'mid_color': "white", 'mid_type': 'num',  'mid_value': 0, 'max_color': "#EF5350"})
-                excelFile.sheets[sheetName].conditional_format(f'E1:E{len(partial_df) -1}', {
+                excelFile.sheets[sheetName].conditional_format(f'E1:E{len(partial_df)}', {
                     'type': '3_color_scale', 'min_color': "#4CAF50",'mid_color': "white", 'mid_type': 'num',  'mid_value': 0, 'max_color': "#EF5350"})
 
     if verbose:
@@ -129,7 +132,7 @@ def visualizeExpensives(df, outputFolder, cutoff_year = None, feature = "CATEGOR
     groupedByCategory = df[[groupby, feature, 'IMPORTO']].groupby(by = [groupby, feature], as_index=False).sum() 
     graphs.creteAreaPlots(groupedByCategory, outputFolder, feature = feature, groupby = groupby)
 
-    print(f"[DONE] Graph ({groupby})\n")
+    print(f"[DONE] GRAPH of {feature} by {groupby}\n")
 
 def computeIncomes(df, outputFolder):
 
@@ -189,33 +192,46 @@ def monthlyStats(df, outputFolder):
     df['MACRO-CATEGORIA'] = df['IMPORTO'].map(lambda value: 'ENTRATE' if value > 0 else 'USCITE')
     df.loc[df['CATEGORIA'] == 'Investments', 'MACRO-CATEGORIA'] = 'INVESTIMENTI'
 
+    # Add liquidità
+    df = df.sort_values(by = 'DATA').reset_index(drop = True)
+    cuttoff_transaction = df[df['DATA'] <= '2023-12-31'].iloc[-1].name
+    df.loc[cuttoff_transaction, "LIQUIDITA"] = CUTOFF_CASH_AMOUNT
+    df.loc[cuttoff_transaction +1:, "LIQUIDITA"] = df.loc[cuttoff_transaction +1:, 'IMPORTO'].cumsum() + CUTOFF_CASH_AMOUNT
+
     # Group the months
     groupedDf = df[['MESE', 'IMPORTO', 'MACRO-CATEGORIA']].groupby(by = ['MESE', 'MACRO-CATEGORIA']).sum() #, as_index = False
 
     # Create the new data representation
     monthlyStats = []
     for month in groupedDf.index.get_level_values(0).unique():
+
+        # Stats
         stats = groupedDf.loc[month, 'IMPORTO']
-        stats['MESE'] = str(month)
+        stats['MESE'] = month
+
+        # Cash 
+        cash = df.loc[df['VALUTA'].dt.to_period('M') == month, 'LIQUIDITA'].dropna()
+        if len(cash) > 0:
+            stats["LIQUIDITA'"] = cash.iloc[-1]
         monthlyStats.append(stats)
     monthlyStats = pd.DataFrame(monthlyStats)
-    monthlyStats = monthlyStats[['MESE', 'ENTRATE', 'USCITE', 'INVESTIMENTI']]
+    monthlyStats = monthlyStats[['MESE', 'ENTRATE', 'USCITE', 'INVESTIMENTI', "LIQUIDITA'"]]
     monthlyStats = monthlyStats.fillna(value = 0).set_index('MESE')
 
     # Save the findings
-    with pd.ExcelWriter(path.join(outputFolder, 'monthlyStats.xlsx'),  engine = 'xlsxwriter') as excelFile:
+    with pd.ExcelWriter(path.join(outputFolder, 'monthlyStats.xlsx'),  engine = 'xlsxwriter', datetime_format="mmmm yyyy") as excelFile:
 
         # Save the main sheet
         monthlyStats.to_excel(excelFile, sheet_name = 'Months', index = True)
 
         # Graphical settings
-        colors = {'ENTRATE': {'MIN': '#C8E6C9', 'MAX': '#388E3C'}, 
-                  'USCITE': {'MAX': '#EF9A9A', 'MIN': '#E53935'}, 
-                  'INVESTIMENTI': {'MAX': '#81D4FA', 'MIN': '#0288D1'}}
+        colors = {'ENTRATE': {'MIN': '#C8E6C9', 'MAX': '#388E3C'}, 'USCITE': {'MAX': '#EF9A9A', 'MIN': '#E53935'}, 
+                  'INVESTIMENTI': {'MAX': '#81D4FA', 'MIN': '#0288D1'}, "LIQUIDITA'": {'MAX': '#F4511E', 'MIN': '#FFCCBC'}}
         euro_fmt = excelFile.book.add_format({'num_format': '#,##0 €'})
         for col_idk, colName in enumerate(monthlyStats.columns):
             excelFile.sheets['Months'].conditional_format(0, col_idk + 1, 999, col_idk + 1, {
                     'type': '2_color_scale', 'min_color': colors[colName]['MIN'], 'max_color': colors[colName]['MAX']})
             excelFile.sheets['Months'].set_column(first_col = col_idk + 1, last_col = col_idk + 1, width = len(colName) + 2, cell_format = euro_fmt)
+        excelFile.sheets['Months'].set_column(first_col = 0, last_col = 0, width = 20)
 
         period.to_excel(excelFile, sheet_name = 'Period', index = True)
