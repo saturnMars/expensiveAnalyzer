@@ -1,1 +1,0 @@
-py app.py & start "" "outputs" & cmd /k

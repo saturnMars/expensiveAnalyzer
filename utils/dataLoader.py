@@ -2,6 +2,7 @@ import pandas as pd
 from os import path, listdir, remove, makedirs
 from json import load
 import shutil
+from datetime import datetime
 
 def initFolders(projectFolder):
     dataFolder = path.join(projectFolder, 'data')
@@ -65,7 +66,8 @@ def loadTransactions(projectFolder, outputfileName = 'transactions.xlsx'):
 
     # Select the first and last date
     last_day, first_day =  df['VALUTA'].iloc[0], df['VALUTA'].iloc[-1]
-    print("--> LAST: ", last_day.strftime('%d-%m-%Y'), "\n--> FIRST:", first_day.strftime('%d-%m-%Y'), "\n")
+    days_ago, hours_ago, *_ = (datetime.now() - last_day).components
+    print("--> LAST: ", last_day.strftime('%d-%m-%Y'),f'({days_ago} days and {hours_ago} hours ago)' ,"\n--> FIRST:", first_day.strftime('%d-%m-%Y'), "\n")
 
     # Erase the folder 
     for fileName in folderFiles:
@@ -122,8 +124,11 @@ def importTransactions(projectFolder):
     df['VALUTA'] = pd.to_datetime(df['VALUTA'], dayfirst=True)
 
     # Modify the numerical representation
+    print(df[['AVERE', 'DARE']])
     for col in ['AVERE', 'DARE']:
-        df[col] = df[col].str.replace('.', '').str.replace(',', '.').astype('float')
+        cond = ~df[col].isna()
+        if cond.any():
+            df.loc[cond, col] = df.loc[cond, col].str.replace('.', '').str.replace(',', '.').astype('float')
     df['CAUSALE ABI'] = df['CAUSALE ABI'].astype(pd.Int32Dtype())
 
     # Replace 
