@@ -124,7 +124,6 @@ def importTransactions(projectFolder):
     df['VALUTA'] = pd.to_datetime(df['VALUTA'], dayfirst=True)
 
     # Modify the numerical representation
-    print(df[['AVERE', 'DARE']])
     for col in ['AVERE', 'DARE']:
         cond = ~df[col].isna()
         if cond.any():
