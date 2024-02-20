@@ -3,6 +3,7 @@ from os import path, listdir, remove, makedirs
 from json import load
 import shutil
 from datetime import datetime
+from hashlib import md5
 
 def initFolders(projectFolder):
     dataFolder = path.join(projectFolder, 'data')
@@ -56,6 +57,9 @@ def loadTransactions(projectFolder, outputfileName = 'transactions.xlsx'):
     if len(df) == 0:
         raise Exception('No data! Neither in the DATA folder nor in the DOWNLOAD folder.\n')
 
+    # Generate the ID (M5 Hash) for each transaction
+    df['ID'] = df['DESCRIZIONE OPERAZIONE'].map(lambda desc: md5(desc.encode('UTF-8')).hexdigest())
+    
     # Sort the new dataframe
     df = df.sort_values(by = ['VALUTA', 'DATA'], ascending = False)
 
@@ -94,6 +98,7 @@ def loadTransactions(projectFolder, outputfileName = 'transactions.xlsx'):
         excelFile.sheets['Transactions'].set_column(first_col = 2, last_col = 2, options = {"hidden": True})
         excelFile.sheets['Transactions'].set_column(first_col = 1, last_col = 1, width = 11)
         excelFile.sheets['Transactions'].set_column(first_col = 5, last_col = 5, width = 50)
+        excelFile.sheets['Transactions'].set_column(first_col = 10, last_col = 10, width = 10)
  
         excelFile.sheets['Transactions'].autofilter('A1:J9999')
 
