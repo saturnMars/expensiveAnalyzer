@@ -7,7 +7,6 @@ import numpy as np
 from utils import graphs
 from utils.dataLoader import loadBudget
 
-
 CUTOFF_CASH_AMOUNT = 2833.96 # 01 January 2024
 
 def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes = False, cutoff_year = None, verbose = False): 
@@ -54,15 +53,19 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
     # (2.c) Add budget
     if feature == 'CATEGORIA':
         budget = loadBudget()
+
         try:
-            groupedByCategory['Δ Budget'] = groupedByCategory.apply(lambda df_row: round(- df_row['IMPORTO'] - (budget[df_row.name[0]] * 3), 0) , axis = 1)
+            groupedByCategory['Δ Budget'] = groupedByCategory.apply(
+                lambda df_row: round(- df_row['IMPORTO'] - (budget[df_row.name[0]] * 3), 0) , axis = 1)
+            
             groupedByCategory['Δ Budget (%)'] = groupedByCategory.apply(
-                lambda df_row: df_row['Δ Budget'] / (budget[df_row.name[0]] * 3) if budget[df_row.name[0]] > 0 else 1, axis = 1)
+                lambda df_row: df_row['Δ Budget'] / (budget[df_row.name[0]] * 3) if budget[df_row.name[0]] > 0 else 9.99, axis = 1)
+        
         except KeyError as missingBudgetCategory:
             raise Exception(f'\n{missingBudgetCategory} is not in the budget! Please include it in the budget file.\n')
         
     # Save the excel file
-    fileName = 'expensiveBy' + ('AbiCode' if feature == "CAUSALE ABI" else 'Category') + '.xlsx'
+    fileName = 'expensives' + ('byAbiCode' if feature == "CAUSALE ABI" else '') + '.xlsx'
     with pd.ExcelWriter(path.join(outputFolder, fileName), engine = 'xlsxwriter') as excelFile:
         groupedByCategory.to_excel(excelFile, sheet_name = 'Overview', freeze_panes = (1,1))
 
@@ -89,10 +92,12 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
                 partial_df.insert(loc = 2, column = 'Δ Budget', value = partial_df.apply(
                     lambda df_row: round(-df_row['IMPORTO'] - budget[df_row.name], 0), axis = 1))
                 partial_df.insert(loc = 3, column = 'Δ Budget (%)', value = partial_df.apply(
-                    lambda df_row: df_row['Δ Budget'] / budget[df_row.name] if budget[df_row.name] > 0 else 1, axis = 1))
+                    lambda df_row: df_row['Δ Budget'] / budget[df_row.name] if budget[df_row.name] > 0 else 9.99, axis = 1))
         
                 partial_df.loc['_TOTAL'] = {'IMPORTO': partial_df['IMPORTO'].sum(), 'Δ Budget' : partial_df['Δ Budget'].sum(),
                                             'Δ Budget (%)': partial_df['Δ Budget'].sum() / np.sum(list(budget.values()))}
+                
+                partial_df.insert(loc = 3, column = "!", value = partial_df['Δ Budget'].map(lambda x: int(x >= 0)))
             
             # Save the sheet
             sheetName = month.strftime('%B %Y')
@@ -102,16 +107,31 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
             excelFile.sheets[sheetName].set_column('B:B', width = 8, cell_format = euro_fmt)
             excelFile.sheets[sheetName].set_column('C:C', width = 5, cell_format = perc_fmt)
             excelFile.sheets[sheetName].set_column('A:A', width = 20)
-            excelFile.sheets[sheetName].set_column(first_col = len(partial_df.columns), last_col =len(partial_df.columns), width = 150)
+            excelFile.sheets[sheetName].set_column(first_col = len(partial_df.columns), last_col =len(partial_df.columns), width = 70)
+            
             excelFile.sheets[sheetName].conditional_format(0, 1, len(partial_df) -1, 1, {
                     'type': '2_color_scale', 'min_color': '#E53935', 'max_color': '#EF9A9A'})
 
             if feature == 'CATEGORIA':
                 excelFile.sheets[sheetName].set_column('D:D', width = 8, cell_format = euro_fmt)
-                excelFile.sheets[sheetName].set_column('E:E', width = 12, cell_format = perc_fmt)
+                excelFile.sheets[sheetName].set_column('F:F', width = 12, cell_format = perc_fmt)
+                excelFile.sheets[sheetName].set_column('E:E', width = 2)
+                excelFile.sheets[sheetName].set_column('G:G', width = 2)
+
+                excelFile.sheets[sheetName].conditional_format('C1:C999', {
+                    "type": "data_bar", "min_type": "num", "max_type": "num", "min_value": 0, "max_value": 1, 
+                    "bar_color": "#CFD8DC", "bar_solid": True, "bar_only": False, "bar_direction":'right'})
+                excelFile.sheets[sheetName].conditional_format('E1:E999', {
+                    'type': 'icon_set', 'icon_style': '3_symbols_circled', 'icons_only': True, 'reverse_icons': True,
+                    'icons': [
+                        {'criteria': '>=', 'type': 'number', 'value': 1},
+                        {'criteria': '<=', 'type': 'number', 'value': 0.5},
+                        {'criteria': '<',  'type': 'number', 'value': 0}]
+                    })
+                
                 excelFile.sheets[sheetName].conditional_format(f'D1:D{len(partial_df)}', {
                     'type': '3_color_scale', 'min_color': "#4CAF50",'mid_color': "white", 'mid_type': 'num',  'mid_value': 0, 'max_color': "#EF5350"})
-                excelFile.sheets[sheetName].conditional_format(f'E1:E{len(partial_df)}', {
+                excelFile.sheets[sheetName].conditional_format(f'F1:F{len(partial_df)}', {
                     'type': '3_color_scale', 'min_color': "#4CAF50",'mid_color': "white", 'mid_type': 'num',  'mid_value': 0, 'max_color': "#EF5350"})
 
     if verbose:
