@@ -178,14 +178,24 @@ def mapExpensives(taxonomy, desc):
 
 def addExpensiveCategories(df, folderData):
 
-    # Load taxonomy
+    # Load expensive taxonomy
     with open(path.join(folderData, 'expensiveCategories.json')) as jsonFile:
         expensiveCategories = load(jsonFile)
     expensiveMapping = {expensive: cat for cat, expList in expensiveCategories.items() for expensive in expList}
 
     # Map the expensive
-    expensiveFilter = df['IMPORTO'] < 0
-    df.loc[expensiveFilter, 'CATEGORIA'] = df.loc[expensiveFilter,'DESCRIZIONE OPERAZIONE'].map(lambda desc: mapExpensives(expensiveMapping, desc))
+    expensiveFilter_cond = df['IMPORTO'] < 0
+    df.loc[expensiveFilter_cond, 'CATEGORIA'] = df.loc[expensiveFilter_cond,'DESCRIZIONE OPERAZIONE'].map(
+        lambda desc: mapExpensives(expensiveMapping, desc))
+        
+    # Load one-off transaction
+    with open(path.join(folderData, 'oneOffTransactions.json')) as jsonFile:
+        oneOffTransactions = load(jsonFile)
+
+    # Map the one-off expensive
+    for category, transactions in oneOffTransactions.items():
+        for transaction_id in transactions:
+            df.loc[df['ID'] == transaction_id, "CATEGORIA"] = category
     return df
 
 def cleanDescription(desc):
