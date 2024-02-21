@@ -33,7 +33,7 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
                         for expensive in df_row['OPERAZIONI']], axis = 1)
     expensivesByMonth['OPERAZIONI'] = expensivesByMonth['OPERAZIONI'].map(lambda items: sorted(items, key = lambda item: (item[2], item[1]), reverse = True))
     expensivesByMonth['OPERAZIONI'] = expensivesByMonth['OPERAZIONI'].map(
-        lambda items: '\n '.join([item[0] + (f" (x{item[1]}, " if item[1] > 1 else ' (') + str(int(item[2]) if item[2] >= 1 else item[2]) + " €)"
+        lambda items: ' | '.join([item[0] + (f" (x{item[1]}, " if item[1] > 1 else ' (') + str(int(item[2]) if item[2] >= 1 else item[2]) + " €)"
                                    for item in items]))
     
     expensivesByMonth = expensivesByMonth.drop(columns = ['DESC']).sort_index(ascending = False)
