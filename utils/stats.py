@@ -237,12 +237,13 @@ def monthlyStats(df, outputFolder):
     monthlyStats = pd.DataFrame(monthlyStats)
     monthlyStats = monthlyStats[['MESE', 'ENTRATE', 'USCITE', 'INVESTIMENTI', "LIQUIDITA'"]]
     monthlyStats = monthlyStats.fillna(value = 0).set_index('MESE')
+    monthlyStats = monthlyStats.sort_index(ascending = False)
 
     # Save the findings
     with pd.ExcelWriter(path.join(outputFolder, 'monthlyStats.xlsx'),  engine = 'xlsxwriter', datetime_format="mmmm yyyy") as excelFile:
 
         # Save the main sheet
-        monthlyStats.to_excel(excelFile, sheet_name = 'Months', index = True)
+        monthlyStats.to_excel(excelFile, sheet_name = 'Months', index = True, freeze_panes=(1, 0))
 
         # Graphical settings
         colors = {'ENTRATE': {'MIN': '#C8E6C9', 'MAX': '#388E3C'}, 'USCITE': {'MAX': '#EF9A9A', 'MIN': '#E53935'}, 
@@ -254,4 +255,8 @@ def monthlyStats(df, outputFolder):
             excelFile.sheets['Months'].set_column(first_col = col_idk + 1, last_col = col_idk + 1, width = len(colName) + 2, cell_format = euro_fmt)
         excelFile.sheets['Months'].set_column(first_col = 0, last_col = 0, width = 20)
 
+        grey_format = excelFile.book.add_format({'bg_color': '#EEEEEE'})
+        excelFile.sheets['Months'].conditional_format(f'A2:A{len(monthlyStats)}', {
+            'type':'formula', 'criteria': "=MOD(ROW(),2)=0", 'format':  grey_format})
+  
         period.to_excel(excelFile, sheet_name = 'Period', index = True)

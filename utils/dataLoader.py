@@ -71,7 +71,7 @@ def loadTransactions(projectFolder, outputfileName = 'transactions.xlsx'):
     # Select the first and last date
     last_day, first_day =  df['VALUTA'].iloc[0], df['VALUTA'].iloc[-1]
     days_ago, hours_ago, *_ = (datetime.now() - last_day).components
-    print("--> LAST: ", last_day.strftime('%d-%m-%Y'),f'({days_ago} days and {hours_ago} hours ago)' ,"\n--> FIRST:", first_day.strftime('%d-%m-%Y'), "\n")
+    print("\n--> LAST: ", last_day.strftime('%d-%m-%Y'),f'({days_ago} days and {hours_ago} hours ago)' ,"\n--> FIRST:", first_day.strftime('%d-%m-%Y'), "\n")
 
     # Erase the folder 
     for fileName in folderFiles:
