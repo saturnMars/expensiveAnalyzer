@@ -3,6 +3,7 @@ from os import path, listdir, remove, makedirs
 from json import load
 import shutil
 from hashlib import md5
+from pandas.io.formats.excel import ExcelFormatter
 
 def initFolders(projectFolder):
     dataFolder = path.join(projectFolder, 'data')
@@ -16,7 +17,7 @@ def initFolders(projectFolder):
 
     return dataFolder, outputFolder, graphFolder
 
-def importTransactionFile(projectFolder, importPath):
+def importCSVTransactions(projectFolder, importPath):
     if not path.exists(importPath):
         print(f"\n[WARNING] The import path does not exist! {importPath} --> (A) Change che import path in the app.py file.--> (B) Put the file into the ./data folder.\n")
         return False
@@ -31,7 +32,9 @@ def importTransactionFile(projectFolder, importPath):
                 return None
     return None
 
-def loadTransactions(projectFolder, outputfileName = 'Transactions.xlsx'):
+def loadTransactions(projectFolder):
+
+    outputfileName = 'Transactions.xlsx'
 
     # Attach new transactions
     df = importTransactions(projectFolder)
@@ -43,7 +46,7 @@ def loadTransactions(projectFolder, outputfileName = 'Transactions.xlsx'):
     if outputfileName in folderFiles:
 
         # Load the excel file
-        main_df = pd.read_excel(path.join(dataFolder, outputfileName)) 
+        main_df = pd.read_excel(path.join(dataFolder, outputfileName), sheet_name='Transactions') 
 
         # Upload the categories
         main_df = addExpensiveCategories(main_df, folderData = path.join(projectFolder, 'taxonomies'))
@@ -72,26 +75,43 @@ def loadTransactions(projectFolder, outputfileName = 'Transactions.xlsx'):
            remove(file_path)
 
     # Save the dataframe
-    with pd.ExcelWriter(path.join(dataFolder, f"Transactions.xlsx"),  engine = 'xlsxwriter', datetime_format="d mmm yyyy") as excelFile:
-        df.to_excel(excelFile, index = False, sheet_name = 'Transactions', freeze_panes = (1,1))
+    ExcelFormatter.header_style = None
+    with pd.ExcelWriter(path.join(dataFolder, outputfileName),  engine = 'xlsxwriter', datetime_format="d mmm yyyy") as excelFile:
+        
+        # Main
+        df.drop(columns = ['ID']).to_excel(excelFile, index = False, sheet_name = 'Transactions', freeze_panes = (1,0))
+
+        # IDs
+        columns = ['ID', 'VALUTA', 'CATEGORIA', 'DESCRIZIONE OPERAZIONE']
+        df[columns].to_excel(excelFile, index = False, sheet_name = 'IDs', freeze_panes = (1, 0))
         
         # Graphical settings
         grey_format = excelFile.book.add_format({'bg_color': '#EEEEEE'})
         white_format = excelFile.book.add_format({'bg_color': '#FFFFFF'})
-        for idk_row in range(1, len(df)):
-            excelFile.sheets['Transactions'].set_row(idk_row, cell_format = white_format if idk_row % 2 ==0 else grey_format)
+        header_format = excelFile.book.add_format({'bg_color': '#9DBC98', 'font_color': 'white', 'bold': False, 'valign': 'center'})
+   
+        for sheet in excelFile.sheets.values():
+            for idk_row in range(1, len(df)):
+                sheet.set_row(idk_row, cell_format = white_format if idk_row % 2 ==0 else grey_format)
 
-        excelFile.sheets['Transactions'].conditional_format('E1:E999', {'type': '3_color_scale', 
-                                                                        'min_type': 'percentile', 'min_value': 5, 'min_color': "#EF5350", 
-                                                                        'mid_color': "white", 'mid_type': 'num', 'mid_value': 0, 
-                                                                        'max_color': "#4CAF50"})
-        excelFile.sheets['Transactions'].autofit()
-        excelFile.sheets['Transactions'].set_column(first_col = 0, last_col = 0, options = {"hidden": True})
-        excelFile.sheets['Transactions'].set_column(first_col = 2, last_col = 2, options = {"hidden": True})
-        excelFile.sheets['Transactions'].set_column(first_col = 1, last_col = 1, width = 11)
+            sheet.set_row(0, None, header_format)
+            sheet.autofit()
+
+        # Colorbar
+        excelFile.sheets['Transactions'].conditional_format('E2:E999', {
+            'type': '3_color_scale', 'min_type': 'percentile', 'min_value': 5, 'min_color': "#FF8080", 
+            'mid_color': "white", 'mid_type': 'num', 'mid_value': 0, 'max_color': "#99BC85"})
+        
+        # Hidden columns
+        for i in [0, 2]:
+            excelFile.sheets['Transactions'].set_column(first_col = i, last_col = i, options = {"hidden": True})
+
+        # Set custom width
+        #excelFile.sheets['Transactions'].set_column(first_col = 1, last_col = 1, width = 11)
         excelFile.sheets['Transactions'].set_column(first_col = 5, last_col = 5, width = 50)
-        excelFile.sheets['Transactions'].set_column(first_col = 10, last_col = 10, width = 10)
- 
+        #excelFile.sheets['Transactions'].set_column(first_col = 10, last_col = 10, width = 10)
+
+        # Autofilter
         excelFile.sheets['Transactions'].autofilter('A1:J9999')
 
     return df

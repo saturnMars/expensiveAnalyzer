@@ -3,6 +3,8 @@ from pathlib import Path
 from locale import getlocale
 from datetime import datetime
 from win11toast import toast
+from time import sleep
+from tqdm import tqdm
 
 # LOCAL IMPORTS
 from utils import dataLoader, stats
@@ -17,7 +19,7 @@ if __name__ == '__main__':
 
     # Import transaction file
     importPath = path.join(Path.home(), "Download" if getlocale()[0].split('_')[0] == 'it' else "Downloads") 
-    importedFileName = dataLoader.importTransactionFile(projectFolder, importPath)
+    importedFileName = dataLoader.importCSVTransactions(projectFolder, importPath)
 
     # Read movements
     df = dataLoader.loadTransactions(projectFolder)
@@ -57,7 +59,8 @@ if __name__ == '__main__':
     stats.visualizeExpensives(df, outputFolder = graphFolder, cutoff_year = cutOffYear, feature = "CAUSALE ABI", groupby = "TRIMESTRE" )
 
     # Window Message
-    toast(*tost_message, 
+    print('Waiting timeout notification')
+    x = toast(*tost_message, 
           icon = path.join(projectFolder, 'images', 'inbank.ico'),
           audio = {'silent': 'true'}, 
           duration='long',

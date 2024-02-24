@@ -71,13 +71,15 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
 
         euro_fmt = excelFile.book.add_format({'num_format': '#,##0 €'})
         perc_fmt = excelFile.book.add_format({"num_format": "0%"})
+        header_format = excelFile.book.add_format({'bg_color': '#3D3B40', 'font_color': 'white', 'bold': False, 'valign': 'center'})
         excelFile.sheets['Overview'].set_column('D:E', width = 8, cell_format = euro_fmt)
         excelFile.sheets['Overview'].set_column('F:F', width = 12, cell_format = perc_fmt)
         excelFile.sheets['Overview'].set_column('A:A', width = 20)
         excelFile.sheets['Overview'].conditional_format('E1:E999', {
-            'type': '3_color_scale', 'min_color': "#4CAF50",'mid_color': "white", 'mid_type': 'num',  'mid_value': 0, 'max_color': "#EF5350"})
+            'type': '3_color_scale', 'min_color': "#99BC85",'mid_color': "white", 'mid_type': 'num',  'mid_value': 0, 'max_color': "#C83E3E"})
         excelFile.sheets['Overview'].conditional_format('F1:F999', {
-            'type': '3_color_scale', 'min_color': "#4CAF50",'mid_color': "white", 'mid_type': 'num',  'mid_value': 0, 'max_color': "#EF5350"})
+           'type': '3_color_scale', 'min_color': "#99BC85",'mid_color': "white", 'mid_type': 'num',  'mid_value': 0, 'max_color': "#C83E3E"})
+        excelFile.sheets['Overview'].set_row(0, None, header_format)
 
         # Monthy stats
         for month in expensivesByMonth.index.get_level_values(0).unique():
@@ -104,13 +106,14 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
             partial_df.to_excel(excelFile, sheet_name = sheetName, index = True)
 
             # Graphical settings
+            excelFile.sheets[sheetName].set_row(0, None, header_format)
+            #excelFile.sheets[sheetName].set_row(len(partial_df), None, header_format)
             excelFile.sheets[sheetName].set_column('B:B', width = 8, cell_format = euro_fmt)
             excelFile.sheets[sheetName].set_column('C:C', width = 5, cell_format = perc_fmt)
             excelFile.sheets[sheetName].set_column('A:A', width = 20)
             excelFile.sheets[sheetName].set_column(first_col = len(partial_df.columns), last_col =len(partial_df.columns), width = 70)
-            
             excelFile.sheets[sheetName].conditional_format(0, 1, len(partial_df) -1, 1, {
-                    'type': '2_color_scale', 'min_color': '#E53935', 'max_color': '#EF9A9A'})
+                    'type': '2_color_scale', 'min_color': '#C83E3E', 'max_color': '#E6A8A8'})
 
             if feature == 'CATEGORIA':
                 excelFile.sheets[sheetName].set_column('D:D', width = 8, cell_format = euro_fmt)
@@ -130,10 +133,10 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
                     })
                 
                 excelFile.sheets[sheetName].conditional_format(f'D1:D{len(partial_df)}', {
-                    'type': '3_color_scale', 'min_color': "#4CAF50",'mid_color': "white", 'mid_type': 'num',  'mid_value': 0, 'max_color': "#EF5350"})
+                    'type': '3_color_scale', 'min_color': "#99BC85",'mid_color': "white", 'mid_type': 'num', 'mid_value': 0, 'max_color': "#C83E3E"})
                 excelFile.sheets[sheetName].conditional_format(f'F1:F{len(partial_df)}', {
-                    'type': '3_color_scale', 'min_color': "#4CAF50",'mid_color': "white", 'mid_type': 'num',  'mid_value': 0, 'max_color': "#EF5350"})
-
+                    'type': '3_color_scale', 'min_color': "#99BC85",'mid_color': "white", 'mid_type': 'num',  'mid_value': 0, 'max_color': "#C83E3E"})
+                
     if verbose:
         print(groupedByCategory)
 
@@ -181,7 +184,6 @@ def computeIncomes(df, outputFolder):
         # Add the descriptions
         grouped_df['DESC'] = grouped_df['DESC'].str.split('!').map(lambda items: [item for item in items if item != ""]).apply(Counter)
         grouped_df['DESC'] = grouped_df['DESC'].map(lambda count: sorted(count.items(), key = lambda item: item[1], reverse=True))
-
         grouped_df['DESC'] = grouped_df.apply(
             lambda df_row: [expensive + tuple([groupedByDesc.loc[[(expensive[0] + '!', df_row.name[1])], 'IMPORTO'].round(2).iloc[0]])
                             for expensive in df_row['DESC']], axis = 1)
