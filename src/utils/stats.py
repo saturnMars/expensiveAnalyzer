@@ -55,15 +55,15 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
         budget = loadBudget()
 
         try:
-            groupedByCategory['Δ Budget'] = groupedByCategory.apply(
+            groupedByCategory['Δ BUDGET'] = groupedByCategory.apply(
                 lambda df_row: round(- df_row['IMPORTO'] - (budget[df_row.name[0]] * 3), 0) , axis = 1)
             
-            groupedByCategory['Δ Budget (%)'] = groupedByCategory.apply(
-                lambda df_row: df_row['Δ Budget'] / (budget[df_row.name[0]] * 3) if budget[df_row.name[0]] > 0 else 9.99, axis = 1)
+            groupedByCategory['Δ BUDGET (%)'] = groupedByCategory.apply(
+                lambda df_row: df_row['Δ BUDGET'] / (budget[df_row.name[0]] * 3) if budget[df_row.name[0]] > 0 else 9.99, axis = 1)
         
         except KeyError as missingBudgetCategory:
             raise Exception(f'\n{missingBudgetCategory} is not in the budget! Please include it in the budget file.\n')
-        
+
     # Save the excel file
     fileName = 'expensives' + ('byAbiCode' if feature == "CAUSALE ABI" else '') + '.xlsx'
     with pd.ExcelWriter(path.join(outputFolder, fileName), engine = 'xlsxwriter') as excelFile:
@@ -71,8 +71,9 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
 
         euro_fmt = excelFile.book.add_format({'num_format': '#,##0 €', 'font_size': 16})
         perc_fmt = excelFile.book.add_format({"num_format": "0%", 'font_size': 16})
-        header_format = excelFile.book.add_format({'bg_color': '#3D3B40', 'font_color': 'white', 'bold': False, 'valign': 'center', 'font_size': 16})
-
+        header_format = excelFile.book.add_format({'bg_color': '#3D3B40', 'font_color': 'white', 'bold': False, 'valign': 'center', 'font_size': 20})
+        excelFile.book.formats[0].set_font_size(16)
+        excelFile.book.formats[0].set_align('vcenter')
         excelFile.sheets['Overview'].set_column('D:E', width = 8, cell_format = euro_fmt)
         excelFile.sheets['Overview'].set_column('F:F', width = 12, cell_format = perc_fmt)
         excelFile.sheets['Overview'].set_column('A:A', width = 20)
@@ -83,6 +84,7 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
         excelFile.sheets['Overview'].set_row(0, None, header_format)
         excelFile.sheets['Overview'].conditional_format('D1:D999', {
                     'type': '2_color_scale', 'min_color': '#C83E3E', 'max_color': '#E6A8A8'})
+        excelFile.sheets['Overview'].autofit()
 
         # Monthy stats
         for month in expensivesByMonth.index.get_level_values(0).unique():
@@ -94,19 +96,19 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
 
             # Delta from budget
             if feature == 'CATEGORIA':
-                partial_df.insert(loc = 2, column = 'Δ Budget', value = partial_df.apply(
+                partial_df.insert(loc = 2, column = 'Δ BUDGET', value = partial_df.apply(
                     lambda df_row: round(-df_row['IMPORTO'] - budget[df_row.name], 0), axis = 1))
-                partial_df.insert(loc = 3, column = 'Δ Budget (%)', value = partial_df.apply(
-                    lambda df_row: df_row['Δ Budget'] / budget[df_row.name] if budget[df_row.name] > 0 else 9.99, axis = 1))
+                partial_df.insert(loc = 3, column = 'Δ BUDGET (%)', value = partial_df.apply(
+                    lambda df_row: df_row['Δ BUDGET'] / budget[df_row.name] if budget[df_row.name] > 0 else 9.99, axis = 1))
         
-                partial_df.loc['_TOTAL'] = {'IMPORTO': partial_df['IMPORTO'].sum(), 'Δ Budget' : partial_df['Δ Budget'].sum(),
-                                            'Δ Budget (%)': partial_df['Δ Budget'].sum() / np.sum(list(budget.values()))}
+                partial_df.loc['_TOTAL'] = {'IMPORTO': partial_df['IMPORTO'].sum(), 'Δ BUDGET' : partial_df['Δ BUDGET'].sum(),
+                                            'Δ BUDGET (%)': partial_df['Δ BUDGET'].sum() / np.sum(list(budget.values()))}
                 
-                partial_df.insert(loc = 3, column = "!", value = partial_df['Δ Budget'].map(lambda x: int(x >= 0)))
-            
+                partial_df.insert(loc = 3, column = "!", value = partial_df['Δ BUDGET'].map(lambda x: int(x >= 0)))
+
             # Save the sheet
             sheetName = month.strftime('%B %Y')
-            partial_df.to_excel(excelFile, sheet_name = sheetName, index = True)
+            partial_df.to_excel(excelFile, sheet_name = sheetName, index = True,  freeze_panes = (1,1))
 
             # Graphical settings
             excelFile.sheets[sheetName].set_row(0, None, header_format)
@@ -138,7 +140,8 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
                     'type': '3_color_scale', 'min_color': "#99BC85",'mid_color': "white", 'mid_type': 'num', 'mid_value': 0, 'max_color': "#C83E3E"})
                 excelFile.sheets[sheetName].conditional_format(f'F1:F{len(partial_df)}', {
                     'type': '3_color_scale', 'min_color': "#99BC85",'mid_color': "white", 'mid_type': 'num',  'mid_value': 0, 'max_color': "#C83E3E"})
-        excelFile.book.formats[0].set_font_size(16)
+                excelFile.sheets[sheetName].autofit()
+        
     if verbose:
         print(groupedByCategory)
 
@@ -202,8 +205,24 @@ def computeIncomes(df, outputFolder):
 
     # Save the stats
     with pd.ExcelWriter(path.join(outputFolder, 'incomes.xlsx')) as excelFile:
+          
+        # Formats
+        excelFile.book.formats[0].set_font_size(16)
+        excelFile.book.formats[0].set_align('vcenter')
+
+        euro_fmt = excelFile.book.add_format({'num_format': '#,##0 €', 'font_size': 16})
+        header_format = excelFile.book.add_format({'bg_color': '#3D3B40', 'font_color': 'white', 'bold': False, 'valign': 'center', 'font_size': 16})
         for featureName, grouped_df in stats.items():
+          
             grouped_df.to_excel(excelFile, sheet_name = featureName)
+
+            # Graph settings
+            sheet = excelFile.sheets[featureName]
+            sheet.set_row(0, None, header_format)
+            value_col = 'B1:B999' if featureName == 'Overview' else 'C1:C999' 
+            sheet.set_column(value_col, width = 8, cell_format = euro_fmt)
+            sheet.conditional_format(value_col, {'type': '2_color_scale', 'min_color': '#E1F0DA', 'max_color': '#99BC85'})
+            sheet.autofit()
 
 
 def monthlyStats(df, outputFolder):
