@@ -69,9 +69,10 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
     with pd.ExcelWriter(path.join(outputFolder, fileName), engine = 'xlsxwriter') as excelFile:
         groupedByCategory.to_excel(excelFile, sheet_name = 'Overview', freeze_panes = (1,1))
 
-        euro_fmt = excelFile.book.add_format({'num_format': '#,##0 €'})
-        perc_fmt = excelFile.book.add_format({"num_format": "0%"})
-        header_format = excelFile.book.add_format({'bg_color': '#3D3B40', 'font_color': 'white', 'bold': False, 'valign': 'center'})
+        euro_fmt = excelFile.book.add_format({'num_format': '#,##0 €', 'font_size': 16})
+        perc_fmt = excelFile.book.add_format({"num_format": "0%", 'font_size': 16})
+        header_format = excelFile.book.add_format({'bg_color': '#3D3B40', 'font_color': 'white', 'bold': False, 'valign': 'center', 'font_size': 16})
+
         excelFile.sheets['Overview'].set_column('D:E', width = 8, cell_format = euro_fmt)
         excelFile.sheets['Overview'].set_column('F:F', width = 12, cell_format = perc_fmt)
         excelFile.sheets['Overview'].set_column('A:A', width = 20)
@@ -80,6 +81,8 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
         excelFile.sheets['Overview'].conditional_format('F1:F999', {
            'type': '3_color_scale', 'min_color': "#99BC85",'mid_color': "white", 'mid_type': 'num',  'mid_value': 0, 'max_color': "#C83E3E"})
         excelFile.sheets['Overview'].set_row(0, None, header_format)
+        excelFile.sheets['Overview'].conditional_format('D1:D999', {
+                    'type': '2_color_scale', 'min_color': '#C83E3E', 'max_color': '#E6A8A8'})
 
         # Monthy stats
         for month in expensivesByMonth.index.get_level_values(0).unique():
@@ -135,7 +138,7 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
                     'type': '3_color_scale', 'min_color': "#99BC85",'mid_color': "white", 'mid_type': 'num', 'mid_value': 0, 'max_color': "#C83E3E"})
                 excelFile.sheets[sheetName].conditional_format(f'F1:F{len(partial_df)}', {
                     'type': '3_color_scale', 'min_color': "#99BC85",'mid_color': "white", 'mid_type': 'num',  'mid_value': 0, 'max_color': "#C83E3E"})
-                
+        excelFile.book.formats[0].set_font_size(16)
     if verbose:
         print(groupedByCategory)
 
