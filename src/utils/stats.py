@@ -7,8 +7,6 @@ import numpy as np
 from utils import graphs
 from utils.dataLoader import loadBudget
 
-CUTOFF_CASH_AMOUNT = 2833.96 # 01 January 2024
-
 def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes = False, cutoff_year = None, verbose = False): 
 
     df['DESC'] += "!"
@@ -213,7 +211,6 @@ def computeIncomes(df, outputFolder):
         euro_fmt = excelFile.book.add_format({'num_format': '#,##0 €', 'font_size': 16})
         header_format = excelFile.book.add_format({'bg_color': '#3D3B40', 'font_color': 'white', 'bold': False, 'valign': 'center', 'font_size': 16})
         for featureName, grouped_df in stats.items():
-          
             grouped_df.to_excel(excelFile, sheet_name = featureName)
 
             # Graph settings
@@ -225,7 +222,7 @@ def computeIncomes(df, outputFolder):
             sheet.autofit()
 
 
-def monthlyStats(df, outputFolder):
+def monthlyStats(df, cutoff_cash_amount, outputFolder):
 
     # Save the period
     period = pd.Series({'Last Transaction': df['VALUTA'].iloc[0], 'First Transaction': df['VALUTA'].iloc[-1]}, name  = 'Date')
@@ -238,8 +235,8 @@ def monthlyStats(df, outputFolder):
     # Add liquidità
     df = df.sort_values(by = 'DATA').reset_index(drop = True)
     cuttoff_transaction = df[df['DATA'] <= '2023-12-31'].iloc[-1].name
-    df.loc[cuttoff_transaction, "LIQUIDITA"] = CUTOFF_CASH_AMOUNT
-    df.loc[cuttoff_transaction +1:, "LIQUIDITA"] = df.loc[cuttoff_transaction +1:, 'IMPORTO'].cumsum() + CUTOFF_CASH_AMOUNT
+    df.loc[cuttoff_transaction, "LIQUIDITA"] = cutoff_cash_amount
+    df.loc[cuttoff_transaction +1:, "LIQUIDITA"] = df.loc[cuttoff_transaction +1:, 'IMPORTO'].cumsum() + cutoff_cash_amount
 
     # Group the months
     groupedDf = df[['MESE', 'IMPORTO', 'MACRO-CATEGORIA']].groupby(by = ['MESE', 'MACRO-CATEGORIA']).sum() #, as_index = False
@@ -263,23 +260,32 @@ def monthlyStats(df, outputFolder):
     monthlyStats = monthlyStats.sort_index(ascending = False)
 
     # Save the findings
+    colors = {'ENTRATE': {'MIN': '#C8E6C9', 'MAX': '#388E3C'}, 
+              'USCITE': {'MAX': '#EF9A9A', 'MIN': '#E53935'}, 
+              'INVESTIMENTI': {'MAX': '#81D4FA', 'MIN': '#0288D1'}, 
+              "LIQUIDITA'": {'MAX': '#F4511E', 'MIN': '#FFCCBC'}}
     with pd.ExcelWriter(path.join(outputFolder, 'monthlyStats.xlsx'),  engine = 'xlsxwriter', datetime_format="mmmm yyyy") as excelFile:
 
         # Save the main sheet
         monthlyStats.to_excel(excelFile, sheet_name = 'Months', index = True, freeze_panes=(1, 0))
+        sheet = excelFile.sheets['Months']
 
         # Graphical settings
-        colors = {'ENTRATE': {'MIN': '#C8E6C9', 'MAX': '#388E3C'}, 'USCITE': {'MAX': '#EF9A9A', 'MIN': '#E53935'}, 
-                  'INVESTIMENTI': {'MAX': '#81D4FA', 'MIN': '#0288D1'}, "LIQUIDITA'": {'MAX': '#F4511E', 'MIN': '#FFCCBC'}}
-        euro_fmt = excelFile.book.add_format({'num_format': '#,##0 €'})
-        for col_idk, colName in enumerate(monthlyStats.columns):
-            excelFile.sheets['Months'].conditional_format(0, col_idk + 1, 999, col_idk + 1, {
-                    'type': '2_color_scale', 'min_color': colors[colName]['MIN'], 'max_color': colors[colName]['MAX']})
-            excelFile.sheets['Months'].set_column(first_col = col_idk + 1, last_col = col_idk + 1, width = len(colName) + 2, cell_format = euro_fmt)
-        excelFile.sheets['Months'].set_column(first_col = 0, last_col = 0, width = 20)
+        excelFile.book.formats[0].set_font_size(18)
+        
+        header_format = excelFile.book.add_format({'bg_color': '#3D3B40', 'font_color': 'white', 'bold': False, 'valign': 'center', 'font_size': 18})
+        grey_format = excelFile.book.add_format({'bg_color': '#EEEEEE','font_size': 18})
+        euro_fmt = excelFile.book.add_format({'num_format': '#,##0 €', 'font_size': 18})
+        sheet.set_column('B1:E999', cell_format = euro_fmt)
 
-        grey_format = excelFile.book.add_format({'bg_color': '#EEEEEE'})
-        excelFile.sheets['Months'].conditional_format(f'A2:A{len(monthlyStats)}', {
+        for col_idk, colName in enumerate(monthlyStats.columns):
+            sheet.conditional_format(0, col_idk + 1, 999, col_idk + 1, {
+                    'type': '2_color_scale', 'min_color': colors[colName]['MIN'], 'max_color': colors[colName]['MAX']})
+        sheet.set_row(0, None, header_format)
+
+        sheet.conditional_format(f'A2:A{len(monthlyStats)}', {
             'type':'formula', 'criteria': "=MOD(ROW(),2)=0", 'format':  grey_format})
-  
+      
+        sheet.autofit()
+
         period.to_excel(excelFile, sheet_name = 'Period', index = True)

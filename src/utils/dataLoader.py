@@ -1,9 +1,9 @@
-import pandas as pd
 from os import path, listdir, remove, makedirs
 from json import load
-import shutil
 from hashlib import md5
 from pandas.io.formats.excel import ExcelFormatter
+import pandas as pd
+import shutil
 
 def initFolders(projectFolder):
     dataFolder = path.join(projectFolder, 'data')

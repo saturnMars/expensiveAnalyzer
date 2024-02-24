@@ -3,18 +3,21 @@ from pathlib import Path
 from locale import getlocale
 from datetime import datetime
 from win11toast import toast
-from time import sleep
-from tqdm import tqdm
+from configparser import ConfigParser
 
 # LOCAL IMPORTS
 from utils import dataLoader, stats
 
-cutOffYear = 2024
-
 if __name__ == '__main__':
+
+    config = ConfigParser()
+    config.read(path.join('src','config.ini'))
+    cutOffYear = int(config.get('PERIOD', 'cutOffYear'))
+    CUTOFF_CASH_AMOUNT = float(config.get('PERIOD', 'CUTOFF_CASH_AMOUNT'))
 
     # Init folders
     projectFolder = getcwd()
+    print("SYS:", projectFolder)
     dataFolder, outputFolder, graphFolder = dataLoader.initFolders(projectFolder)
 
     # Import transaction file
@@ -46,7 +49,7 @@ if __name__ == '__main__':
     stats.computeIncomes(df.copy(), outputFolder = outputFolder)
 
     # Compute monthly stats
-    stats.monthlyStats(df.copy(), outputFolder = outputFolder)
+    stats.monthlyStats(df.copy(), CUTOFF_CASH_AMOUNT, outputFolder = outputFolder)
     
     # Compute expensive by ABI code
     stats.groupExpensives(df.copy(), outputFolder = outputFolder, feature = "CAUSALE ABI", include_incomes = False, cutoff_year = cutOffYear)
