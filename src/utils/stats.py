@@ -107,7 +107,6 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
 
             # Graphical settings
             excelFile.sheets[sheetName].set_row(0, None, header_format)
-            #excelFile.sheets[sheetName].set_row(len(partial_df), None, header_format)
             excelFile.sheets[sheetName].set_column('B:B', width = 8, cell_format = euro_fmt)
             excelFile.sheets[sheetName].set_column('C:C', width = 5, cell_format = perc_fmt)
             excelFile.sheets[sheetName].set_column('A:A', width = 20)
