@@ -4,6 +4,8 @@ from locale import getlocale
 from datetime import datetime
 from win11toast import toast
 from configparser import ConfigParser
+from numpy import datetime64, timedelta64
+from pandas import Period
 
 # LOCAL IMPORTS
 from utils import dataLoader, stats
@@ -12,12 +14,10 @@ if __name__ == '__main__':
 
     config = ConfigParser()
     config.read(path.join('src','config.ini'))
-    cutOffYear = int(config.get('PERIOD', 'cutOffYear'))
-    CUTOFF_CASH_AMOUNT = float(config.get('PERIOD', 'CUTOFF_CASH_AMOUNT'))
+    reporting_period = int(config.get('PERIOD', 'reporting_months'))
 
     # Init folders
     projectFolder = getcwd()
-    print("SYS:", projectFolder)
     dataFolder, outputFolder, graphFolder = dataLoader.initFolders(projectFolder)
 
     # Import transaction file
@@ -45,25 +45,29 @@ if __name__ == '__main__':
     tost_message.append(f"Last Transaction was {days_ago} days and {hours_ago} hours ago "\
                             f"({last_transaction['DESC']} - {last_transaction['CATEGORIA']}, {last_transaction['IMPORTO']} €).")
 
-    # Compute income stats
-    stats.computeIncomes(df.copy(), outputFolder = outputFolder)
-
     # Compute monthly stats
-    stats.monthlyStats(df.copy(), CUTOFF_CASH_AMOUNT, outputFolder = outputFolder)
+    stats.monthly_stats(df, outputFolder = outputFolder)
+
+    # COnsider only the selected period
+    cutOff = datetime64('today', 'M')  - timedelta64(reporting_period, 'M')
+    df = df[df['VALUTA'].dt.to_period('M') > str(cutOff)]
+    print(f"REPORTING PERIOD: {reporting_period} months\nCUTOFF: {cutOff} ({df['VALUTA'].iloc[-1].date()} <--> {df['VALUTA'].iloc[0].date()})\n")
+
+    # Compute income stats
+    stats.compute_incomes(df, outputFolder = outputFolder)
     
     # Compute expensive by ABI code
-    stats.groupExpensives(df.copy(), outputFolder = outputFolder, feature = "CAUSALE ABI", include_incomes = False, cutoff_year = cutOffYear)
-    stats.groupExpensives(df.copy(), outputFolder = outputFolder, feature = "CATEGORIA", include_incomes = False, cutoff_year = cutOffYear)
+    stats.group_expensive(df.copy(), outputFolder = outputFolder, feature = "CAUSALE ABI", include_incomes = False)
+    stats.group_expensive(df.copy(), outputFolder = outputFolder, feature = "CATEGORIA", include_incomes = False)
 
     # Create the area graphs
-    stats.visualizeExpensives(df, outputFolder = graphFolder, cutoff_year = cutOffYear, groupby = "MESE" )
-    stats.visualizeExpensives(df, outputFolder = graphFolder, cutoff_year = cutOffYear, groupby = "TRIMESTRE")
-
-    stats.visualizeExpensives(df, outputFolder = graphFolder, cutoff_year = cutOffYear, feature = "CAUSALE ABI", groupby = "TRIMESTRE" )
+    stats.expensive_graph(df, outputFolder = graphFolder, groupby = "MESE" )
+    stats.expensive_graph(df, outputFolder = graphFolder, groupby = "TRIMESTRE")
+    stats.expensive_graph(df, outputFolder = graphFolder, groupby = "TRIMESTRE", feature = "CAUSALE ABI")
 
     # Window Message
     print('Waiting timeout notification')
-    x = toast(*tost_message, 
+    toast(*tost_message, 
           icon = path.join(projectFolder, 'images', 'inbank.ico'),
           audio = {'silent': 'true'}, 
           duration='long',

@@ -7,7 +7,10 @@ import numpy as np
 from utils import graphs
 from utils.dataLoader import loadBudget
 
-def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes = False, cutoff_year = None, verbose = False): 
+# 01 January 2024
+CUTOFF_CASH_AMOUNT = 2833.96 
+
+def group_expensive(df, outputFolder, feature = "CAUSALE ABI", include_incomes = False, cutoff_year = None, verbose = False): 
 
     df['DESC'] += "!"
     df['#'] = 1
@@ -82,7 +85,7 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
             partial_df.loc['_TOTAL'] = {'IMPORTO': partial_df['IMPORTO'].sum(), 'Δ BUDGET' : partial_df['Δ BUDGET'].sum(),
                                         'Δ BUDGET (%)': partial_df['Δ BUDGET'].sum() / np.sum(list(budget.values()))}
             
-            partial_df.insert(loc = 3, column = "!", value = partial_df['Δ BUDGET'].map(lambda x: 1 if x >= 50 else 0 if x >=0 else -1))
+            partial_df.insert(loc = 3, column = "!", value = partial_df['Δ BUDGET (%)'].map(lambda x: 1 if x >= 0.5 else 0 if x >=0 else -1))
             partial_df.loc[['_TOTAL', ''], '!'] = None
 
             monthlyWarnings = partial_df.loc[partial_df['!'] == 1, ['Δ BUDGET (%)']]
@@ -102,7 +105,7 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
 
         euro_fmt = excelFile.book.add_format({'num_format': '#,##0 €', 'font_size': 16})
         perc_fmt = excelFile.book.add_format({"num_format": "0%", 'font_size': 16})
-        index_fmt = excelFile.book.add_format({"align": "left", 'bold': True, 'font_size': 16})
+        index_fmt = excelFile.book.add_format({"align": "left", 'bold': True, 'font_size': 16, 'align': 'vcenter'})
         header_format = excelFile.book.add_format({'bg_color': '#3D3B40', 'font_color': 'white', 'bold': False, 'valign': 'center', 'font_size': 20})
         excelFile.book.formats[0].set_font_size(16)
         excelFile.book.formats[0].set_align('vcenter')
@@ -121,14 +124,18 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
         excelFile.sheets['Overview'].autofit()
 
         if len(warnings) > 0:
-            warnings = pd.concat(warnings).reset_index(drop = True).sort_values(by = ['Δ BUDGET (%)', 'CATEGORIA', 'MESE'], ascending=False)
-            warnings.to_excel(excelFile, index = False, sheet_name = 'Warnings', freeze_panes = (1,1))
-
+            warnings = pd.pivot_table(pd.concat(warnings), index=['CATEGORIA', 'MESE'])
+            
+            ranks = warnings[['Δ BUDGET (%)']].groupby('CATEGORIA').sum().sort_values(by = 'Δ BUDGET (%)', ascending=False).index.to_list()
+            warnings['ranks'] = [ranks.index(cat[0]) for cat in warnings.index]
+            warnings = warnings.sort_values(by = ['ranks', 'Δ BUDGET (%)', 'MESE'], ascending = [True, False, False]).drop(columns = 'ranks')
+ 
+            warnings.to_excel(excelFile, sheet_name = 'Warnings', freeze_panes = (1,1)) 
             excelFile.sheets['Warnings'].set_column('A:A', cell_format = index_fmt)
             excelFile.sheets['Warnings'].set_column('C:C', cell_format = perc_fmt)
             excelFile.sheets['Warnings'].set_row(0, None, header_format)
-            excelFile.sheets['Warnings'].conditional_format(f'C1:C{len(warnings)}', {
-                    'type': '2_color_scale', 'min_color': '#C83E3E', 'max_color': '#E6A8A8'})
+            excelFile.sheets['Warnings'].conditional_format(f'C2:C{len(warnings) + 1}', {
+                    'type': '2_color_scale', 'min_color': '#E6A8A8', 'max_color': '#C83E3E'})
             excelFile.sheets['Warnings'].autofit()
 
         for month, monthly_df in monthly_dfs.items():
@@ -170,14 +177,19 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
                 excelFile.sheets[sheetName].conditional_format(f'F2:F{len(monthly_df) - 1}', {
                     'type': '3_color_scale', 'min_color': "#99BC85",'mid_color': "white", 'mid_type': 'num',  'mid_value': 0, 'max_color': "#C83E3E"})
             excelFile.sheets[sheetName].autofit()
-
+        
+        if feature == 'CATEGORIA':
+            mapping = dict(zip(map(str, monthly_dfs.keys()), list(excelFile.sheets.keys())[2:]))
+            for idk, item in enumerate(warnings.index.get_level_values(1).astype(str)):
+                excelFile.sheets['Warnings'].write_url(idk + 1, 1, f"internal:'{mapping[item]}'!A1", string = item, 
+                                                    cell_format = excelFile.book.add_format({'font_size': 16, 'font_color': 'black'}))
     if verbose:
         print(groupedByCategory)
 
     print("[DONE] Grouped expensive by:", feature, "\n")
 
 
-def visualizeExpensives(df, outputFolder, cutoff_year = None, feature = "CATEGORIA", groupby = 'TRIMESTRE'):
+def expensive_graph(df, outputFolder, cutoff_year = None, feature = "CATEGORIA", groupby = 'TRIMESTRE'):
     if cutoff_year != None:
         df = df[df['ANNO'] >= cutoff_year]
     df = df[df['IMPORTO'] < 0]
@@ -191,7 +203,7 @@ def visualizeExpensives(df, outputFolder, cutoff_year = None, feature = "CATEGOR
 
     print(f"[DONE] GRAPH of {feature} by {groupby}\n")
 
-def computeIncomes(df, outputFolder):
+def compute_incomes(df, outputFolder):
 
     col_to_group = ['ANNO', 'TRIMESTRE','MESE']
     
@@ -253,7 +265,7 @@ def computeIncomes(df, outputFolder):
             sheet.autofit()
 
 
-def monthlyStats(df, cutoff_cash_amount, outputFolder):
+def monthly_stats(df, outputFolder):
 
     # Save the period
     period = pd.Series({'Last Transaction': df['VALUTA'].iloc[0], 'First Transaction': df['VALUTA'].iloc[-1]}, name  = 'Date')
@@ -266,8 +278,8 @@ def monthlyStats(df, cutoff_cash_amount, outputFolder):
     # Add liquidità
     df = df.sort_values(by = 'DATA').reset_index(drop = True)
     cuttoff_transaction = df[df['DATA'] <= '2023-12-31'].iloc[-1].name
-    df.loc[cuttoff_transaction, "LIQUIDITA"] = cutoff_cash_amount
-    df.loc[cuttoff_transaction +1:, "LIQUIDITA"] = df.loc[cuttoff_transaction +1:, 'IMPORTO'].cumsum() + cutoff_cash_amount
+    df.loc[cuttoff_transaction, "LIQUIDITA"] = CUTOFF_CASH_AMOUNT
+    df.loc[cuttoff_transaction +1:, "LIQUIDITA"] = df.loc[cuttoff_transaction +1:, 'IMPORTO'].cumsum() + CUTOFF_CASH_AMOUNT
 
     # Group the months
     groupedDf = df[['MESE', 'IMPORTO', 'MACRO-CATEGORIA']].groupby(by = ['MESE', 'MACRO-CATEGORIA']).sum() #, as_index = False
@@ -318,5 +330,4 @@ def monthlyStats(df, cutoff_cash_amount, outputFolder):
             'type':'formula', 'criteria': "=MOD(ROW(),2)=0", 'format':  grey_format})
       
         sheet.autofit()
-
         period.to_excel(excelFile, sheet_name = 'Period', index = True)
