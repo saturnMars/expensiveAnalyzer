@@ -38,7 +38,6 @@ if __name__ == '__main__':
     if importedFileName:
         transactions_date = importedFileName.split('_')[:3]
         transactions_date[0] = transactions_date[0][-2:]
-        
         tost_message = [f"Imported transaction up to {'-'.join(transactions_date)}"]
     else:
     
@@ -55,18 +54,18 @@ if __name__ == '__main__':
         df = df[df['VALUTA'].dt.to_period('M') > str(cutOff)]
         print(f"REPORTING PERIOD: {reporting_period} months\nCUTOFF: {cutOff} ({df['VALUTA'].iloc[-1].date()} <--> {df['VALUTA'].iloc[0].date()})\n")
 
-
     # Compute income stats
     Thread(target= stats.compute_incomes, args=(df, outputFolder)).start()
     
     # Compute expensive by ABI code
-    for feature in ["CAUSALE ABI", "CATEGORIA"]:
-        Thread(target = stats.group_expensive, args=(df, outputFolder, feature, False)).start()
+    threads = [Thread(target = stats.group_expensive, args=(df, outputFolder, feature, False)) for feature in ["CAUSALE ABI", "CATEGORIA"]]
+    [thread.start() for thread in threads]
 
     # Create the area graphs
-    for period in ["MESE", "TRIMESTRE"]:
-        Process(target = stats.expensive_graph, args=(df, graphFolder, period, "CATEGORIA"),  daemon=True).start()
-    Process(target =  stats.expensive_graph, args=(df, graphFolder, 'TRIMESTRE', "CAUSALE ABI"), daemon=True).start()
+    processes = [Process(target = stats.expensive_graph, args=(df, graphFolder, period, "CATEGORIA"), daemon=True) 
+                 for period in ["MESE", "TRIMESTRE"]]
+    processes.append(Process(target =  stats.expensive_graph, args=(df, graphFolder, 'TRIMESTRE', "CAUSALE ABI"), daemon=True))
+    [process.start() for process in processes]
 
     # Window Message
     items = {'Expensives':  path.join(projectFolder, 'outputs', 'expensives.xlsx'),
