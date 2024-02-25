@@ -10,16 +10,15 @@ from utils.dataLoader import loadBudget
 # 01 January 2024
 CUTOFF_CASH_AMOUNT = 2833.96 
 
-def group_expensive(df, outputFolder, feature = "CAUSALE ABI", include_incomes = False, cutoff_year = None, verbose = False): 
-
+def group_expensive(df, outputFolder, feature = "CAUSALE ABI", include_incomes = False): 
+    
+    df = df.copy()
     df['DESC'] += "!"
     df['#'] = 1
     
     # Data filtering
     if not include_incomes:
         df = df[df['IMPORTO'] < 0]
-    if cutoff_year != None:
-        df = df[df['ANNO'] >= cutoff_year]
 
     # (1.a) Add expensives by description
     groupedByDesc = df[['DESC', 'IMPORTO', 'MESE']].groupby(by = ['DESC', 'MESE']).sum()
@@ -187,21 +186,11 @@ def group_expensive(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
                                                         cell_format = excelFile.book.add_format({'font_size': 16, 'font_color': 'black'}))
     except PermissionError:
         raise PermissionError("Close the spreadsheet...")
-        
-    if verbose:
-        print(groupedByCategory)
-
     print("[DONE] Grouped expensive by:", feature, "\n")
 
 
-def expensive_graph(df, outputFolder, cutoff_year = None, feature = "CATEGORIA", groupby = 'TRIMESTRE'):
-    if cutoff_year != None:
-        df = df[df['ANNO'] >= cutoff_year]
+def expensive_graph(df, outputFolder, groupby = 'TRIMESTRE', feature = "CATEGORIA"):
     df = df[df['IMPORTO'] < 0]
-
-    if len(df) == 0:
-        print(f"\n[ERROR] No expensives found for the year {cutoff_year}.\n")
-        return
 
     groupedByCategory = df[[groupby, feature, 'IMPORTO']].groupby(by = [groupby, feature], as_index=False).sum() 
     graphs.creteAreaPlots(groupedByCategory, outputFolder, feature = feature, groupby = groupby)

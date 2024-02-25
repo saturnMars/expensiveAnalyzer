@@ -5,7 +5,8 @@ from datetime import datetime
 from win11toast import toast
 from configparser import ConfigParser
 from numpy import datetime64, timedelta64
-from pandas import Period
+from threading import Thread
+from multiprocessing import Process, Pool
 
 # LOCAL IMPORTS
 from utils import dataLoader, stats
@@ -46,7 +47,7 @@ if __name__ == '__main__':
                             f"({last_transaction['DESC']} - {last_transaction['CATEGORIA']}, {last_transaction['IMPORTO']} €).")
 
     # Compute monthly stats
-    stats.monthly_stats(df, outputFolder = outputFolder)
+    Thread(target = stats.monthly_stats, args=(df, outputFolder)).start()
 
     # COnsider only the selected period
     if reporting_period > 0:
@@ -54,26 +55,22 @@ if __name__ == '__main__':
         df = df[df['VALUTA'].dt.to_period('M') > str(cutOff)]
         print(f"REPORTING PERIOD: {reporting_period} months\nCUTOFF: {cutOff} ({df['VALUTA'].iloc[-1].date()} <--> {df['VALUTA'].iloc[0].date()})\n")
 
+
     # Compute income stats
-    stats.compute_incomes(df, outputFolder = outputFolder)
+    Thread(target= stats.compute_incomes, args=(df, outputFolder)).start()
     
     # Compute expensive by ABI code
-    stats.group_expensive(df.copy(), outputFolder = outputFolder, feature = "CAUSALE ABI", include_incomes = False)
-    stats.group_expensive(df.copy(), outputFolder = outputFolder, feature = "CATEGORIA", include_incomes = False)
+    for feature in ["CAUSALE ABI", "CATEGORIA"]:
+        Thread(target = stats.group_expensive, args=(df, outputFolder, feature, False)).start()
 
     # Create the area graphs
-    stats.expensive_graph(df, outputFolder = graphFolder, groupby = "MESE" )
-    stats.expensive_graph(df, outputFolder = graphFolder, groupby = "TRIMESTRE")
-    stats.expensive_graph(df, outputFolder = graphFolder, groupby = "TRIMESTRE", feature = "CAUSALE ABI")
+    for period in ["MESE", "TRIMESTRE"]:
+        Process(target = stats.expensive_graph, args=(df, graphFolder, period, "CATEGORIA"),  daemon=True).start()
+    Process(target =  stats.expensive_graph, args=(df, graphFolder, 'TRIMESTRE', "CAUSALE ABI"), daemon=True).start()
 
     # Window Message
-    print('Waiting timeout notification')
-    toast(*tost_message, 
-          icon = path.join(projectFolder, 'images', 'inbank.ico'),
-          audio = {'silent': 'true'}, 
-          duration='long',
-          buttons = [
-              {'activationType': 'protocol', 'arguments': path.join(projectFolder, 'outputs', 'expensives.xlsx'), 'content': 'Expensives'},
-              {'activationType': 'protocol', 'arguments': path.join(projectFolder, 'outputs', 'graphs', 'expensivesByMonth.png'), 'content': 'Month Graph'},
-              {'activationType': 'protocol', 'arguments': path.join(projectFolder, 'outputs', 'graphs', 'expensivesByQuarters.png'), 'content': 'Quarter Graph'}] 
-    )
+    items = {'Expensives':  path.join(projectFolder, 'outputs', 'expensives.xlsx'),
+             'Month Graph':  path.join(projectFolder, 'outputs', 'graphs', 'expensivesByMonth.png'),
+             'Quarter Graph':  path.join(projectFolder, 'outputs', 'graphs', 'expensivesByQuarters.png')}
+    toast(*tost_message, icon = path.join(projectFolder, 'images', 'inbank.ico'), audio = {'silent': 'true'}, duration='long',
+          buttons = [{'activationType': 'protocol', 'arguments':path, 'content': title} for title, path in items.items()])
