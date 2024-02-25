@@ -85,11 +85,11 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
         excelFile.sheets['Overview'].autofit()
 
         # Monthy stats
+        warnings = []
         for month in expensivesByMonth.index.get_level_values(0).unique():
             partial_df = expensivesByMonth.loc[month, :].sort_values(by = 'IMPORTO', ascending = True) 
 
             # Add new columns 
-            # Percentages
             partial_df.insert(loc = 1, column = '%', value = (partial_df['IMPORTO'] / partial_df['IMPORTO'].sum()).round(2))
 
             # Delta from budget
@@ -102,7 +102,12 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
                 partial_df.loc['_TOTAL'] = {'IMPORTO': partial_df['IMPORTO'].sum(), 'Δ BUDGET' : partial_df['Δ BUDGET'].sum(),
                                             'Δ BUDGET (%)': partial_df['Δ BUDGET'].sum() / np.sum(list(budget.values()))}
                 
-                partial_df.insert(loc = 3, column = "!", value = partial_df['Δ BUDGET'].map(lambda x: int(x >= 0)))
+                partial_df.insert(loc = 3, column = "!", value = partial_df['Δ BUDGET'].map(lambda x: 1 if x >= 50 else 0 if x >=0 else -1))
+
+                monthlyWarnings = partial_df.loc[partial_df['!'] == 1, ['Δ BUDGET (%)']]
+                monthlyWarnings.insert(loc = 0, column = 'MESE', value = month)
+                monthlyWarnings = monthlyWarnings.drop(index = ['_TOTAL', 'Investments']).reset_index()
+                warnings.append(monthlyWarnings)
 
             # Save the sheet
             sheetName = month.strftime('%B %Y')
@@ -130,8 +135,8 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
                     'type': 'icon_set', 'icon_style': '3_symbols_circled', 'icons_only': True, 'reverse_icons': True,
                     'icons': [
                         {'criteria': '>=', 'type': 'number', 'value': 1},
-                        {'criteria': '<=', 'type': 'number', 'value': 0.5},
-                        {'criteria': '<',  'type': 'number', 'value': 0}]
+                        {'criteria': '<=', 'type': 'number', 'value': 0},
+                        {'criteria': '<',  'type': 'number', 'value': -1}]
                     })
                 
                 excelFile.sheets[sheetName].conditional_format(f'D1:D{len(partial_df)}', {
@@ -139,7 +144,17 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
                 excelFile.sheets[sheetName].conditional_format(f'F1:F{len(partial_df)}', {
                     'type': '3_color_scale', 'min_color': "#99BC85",'mid_color': "white", 'mid_type': 'num',  'mid_value': 0, 'max_color': "#C83E3E"})
                 excelFile.sheets[sheetName].autofit()
-        
+
+        if len(warnings) > 0:
+            warnings = pd.concat(warnings).reset_index(drop = True).sort_values(by = ['Δ BUDGET (%)', 'CATEGORIA', 'MESE'], ascending=False)
+            warnings.to_excel(excelFile, index = False, sheet_name = 'Warnings', freeze_panes = (1,1))
+
+            excelFile.sheets['Warnings'].set_column('C:C', cell_format = perc_fmt)
+            excelFile.sheets['Warnings'].set_row(0, None, header_format)
+            excelFile.sheets['Warnings'].conditional_format(f'C1:C{len(warnings)}', {
+                    'type': '2_color_scale', 'min_color': '#C83E3E', 'max_color': '#E6A8A8'})
+            excelFile.sheets['Warnings'].autofit()
+
     if verbose:
         print(groupedByCategory)
 
