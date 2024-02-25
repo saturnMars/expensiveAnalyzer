@@ -46,7 +46,8 @@ def group_expensive(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
     # (2.a) Sort index by code importance
     topAbiCodesByExpensive = df[['IMPORTO', feature]].groupby(by = [feature]).sum().sort_values(by ='IMPORTO', ascending = True).index.to_list()
     groupedByCategory['RANK'] = [topAbiCodesByExpensive.index(entry[0]) for entry in groupedByCategory.index] 
-    groupedByCategory = groupedByCategory.sort_values(by = ['RANK', 'TRIMESTRE',  'IMPORTO'], ascending = [True, False, False]).drop(columns = 'RANK')
+
+    groupedByCategory = groupedByCategory.sort_values(by = ['RANK', 'ANNO', 'TRIMESTRE',  'IMPORTO'], ascending = [True, False, False, False]).drop(columns = 'RANK')
 
     # (2.b) Round the imports
     groupedByCategory['IMPORTO'] = groupedByCategory['IMPORTO'].round(0)
@@ -100,89 +101,93 @@ def group_expensive(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
 
     # Save the excel file
     fileName = 'expensives' + ('byAbiCode' if feature == "CAUSALE ABI" else '') + '.xlsx'
-    with pd.ExcelWriter(path.join(outputFolder, fileName), engine = 'xlsxwriter') as excelFile:
-        groupedByCategory.to_excel(excelFile, sheet_name = 'Overview', freeze_panes = (1,1))
+    try:    
+        with pd.ExcelWriter(path.join(outputFolder, fileName), engine = 'xlsxwriter') as excelFile:
+            groupedByCategory.to_excel(excelFile, sheet_name = 'Overview', freeze_panes = (1,1))
 
-        euro_fmt = excelFile.book.add_format({'num_format': '#,##0 €', 'font_size': 16})
-        perc_fmt = excelFile.book.add_format({"num_format": "0%", 'font_size': 16})
-        index_fmt = excelFile.book.add_format({"align": "left", 'bold': True, 'font_size': 16, 'align': 'vcenter'})
-        header_format = excelFile.book.add_format({'bg_color': '#3D3B40', 'font_color': 'white', 'bold': False, 'valign': 'center', 'font_size': 20})
-        excelFile.book.formats[0].set_font_size(16)
-        excelFile.book.formats[0].set_align('vcenter')
-        excelFile.book.formats[0].set_align('center')
-        excelFile.sheets['Overview'].set_row(0, None, header_format)
-        excelFile.sheets['Overview'].set_column('D:E', cell_format = euro_fmt)
-        excelFile.sheets['Overview'].set_column('F:F', cell_format = perc_fmt) #  width = 12, 
-        excelFile.sheets['Overview'].set_column('A:A', cell_format = index_fmt)
-        #excelFile.sheets['Overview'].set_column('A:A', width = 20)
-        excelFile.sheets['Overview'].conditional_format('E1:E999', {
+            euro_fmt = excelFile.book.add_format({'num_format': '#,##0 €', 'font_size': 16})
+            perc_fmt = excelFile.book.add_format({"num_format": "0%", 'font_size': 16})
+            index_fmt = excelFile.book.add_format({"align": "left", 'bold': True, 'font_size': 16, 'align': 'vcenter'})
+            header_format = excelFile.book.add_format({'bg_color': '#3D3B40', 'font_color': 'white', 'bold': False, 'valign': 'center', 'font_size': 20})
+            excelFile.book.formats[0].set_font_size(16)
+            excelFile.book.formats[0].set_align('vcenter')
+            excelFile.book.formats[0].set_align('center')
+            excelFile.sheets['Overview'].set_row(0, None, header_format)
+            excelFile.sheets['Overview'].set_column('D:E', cell_format = euro_fmt)
+            excelFile.sheets['Overview'].set_column('F:F', cell_format = perc_fmt) #  width = 12, 
+            excelFile.sheets['Overview'].set_column('A:A', cell_format = index_fmt)
+            #excelFile.sheets['Overview'].set_column('A:A', width = 20)
+            excelFile.sheets['Overview'].conditional_format('E1:E999', {
+                'type': '3_color_scale', 'min_color': "#99BC85",'mid_color': "white", 'mid_type': 'num',  'mid_value': 0, 'max_color': "#C83E3E"})
+            excelFile.sheets['Overview'].conditional_format('F1:F999', {
             'type': '3_color_scale', 'min_color': "#99BC85",'mid_color': "white", 'mid_type': 'num',  'mid_value': 0, 'max_color': "#C83E3E"})
-        excelFile.sheets['Overview'].conditional_format('F1:F999', {
-           'type': '3_color_scale', 'min_color': "#99BC85",'mid_color': "white", 'mid_type': 'num',  'mid_value': 0, 'max_color': "#C83E3E"})
-        excelFile.sheets['Overview'].conditional_format('D1:D999', {
-                    'type': '2_color_scale', 'min_color': '#C83E3E', 'max_color': '#E6A8A8'})
-        excelFile.sheets['Overview'].autofit()
+            excelFile.sheets['Overview'].conditional_format('D1:D999', {
+                        'type': '2_color_scale', 'min_color': '#C83E3E', 'max_color': '#E6A8A8'})
+            excelFile.sheets['Overview'].autofit()
 
-        if len(warnings) > 0:
-            warnings = pd.pivot_table(pd.concat(warnings), index=['CATEGORIA', 'MESE'])
-            
-            ranks = warnings[['Δ BUDGET (%)']].groupby('CATEGORIA').sum().sort_values(by = 'Δ BUDGET (%)', ascending=False).index.to_list()
-            warnings['ranks'] = [ranks.index(cat[0]) for cat in warnings.index]
-            warnings = warnings.sort_values(by = ['ranks', 'Δ BUDGET (%)', 'MESE'], ascending = [True, False, False]).drop(columns = 'ranks')
- 
-            warnings.to_excel(excelFile, sheet_name = 'Warnings', freeze_panes = (1,1)) 
-            excelFile.sheets['Warnings'].set_column('A:A', cell_format = index_fmt)
-            excelFile.sheets['Warnings'].set_column('C:C', cell_format = perc_fmt)
-            excelFile.sheets['Warnings'].set_row(0, None, header_format)
-            excelFile.sheets['Warnings'].conditional_format(f'C2:C{len(warnings) + 1}', {
-                    'type': '2_color_scale', 'min_color': '#E6A8A8', 'max_color': '#C83E3E'})
-            excelFile.sheets['Warnings'].autofit()
-
-        for month, monthly_df in monthly_dfs.items():
-
-            # Save the sheet
-            sheetName = month.strftime('%B %Y')
-            monthly_df.to_excel(excelFile, sheet_name = sheetName, index = True,  freeze_panes = (1,1))
-
-            # Graphical settings
-            excelFile.sheets[sheetName].set_row(0, None, header_format)
-            excelFile.sheets[sheetName].set_column('A:A', cell_format = index_fmt)
-            excelFile.sheets[sheetName].set_column('B:B', cell_format = euro_fmt) #  width = 8, 
-            excelFile.sheets[sheetName].set_column('C:C', cell_format = perc_fmt) #  width = 5,
-            excelFile.sheets[sheetName].set_column(first_col = len(partial_df.columns), last_col =len(partial_df.columns), 
-                                                   width = 60, cell_format = excelFile.book.add_format({"align": "left", 'font_size': 16}))
-            
-            excelFile.sheets[sheetName].conditional_format(f'B2:B{len(monthly_df) - 1}', {
-                    'type': '2_color_scale', 'min_color': '#C83E3E', 'max_color': '#E6A8A8'})
-
-            if feature == 'CATEGORIA':
-                excelFile.sheets[sheetName].set_column('D:D', width = 8, cell_format = euro_fmt)
-                excelFile.sheets[sheetName].set_column('F:F', width = 12, cell_format = perc_fmt)
-                excelFile.sheets[sheetName].set_column('E:E', width = 2)
-                excelFile.sheets[sheetName].set_column('G:G', width = 2)
-
-                excelFile.sheets[sheetName].conditional_format(f'C2:C{len(monthly_df) - 1}', {
-                    "type": "data_bar", "min_type": "num", "max_type": "num", "min_value": 0, "max_value": 1, 
-                    "bar_color": "#CFD8DC", "bar_solid": True, "bar_only": False, "bar_direction":'right'})
-                excelFile.sheets[sheetName].conditional_format(f'E2:E{len(monthly_df) - 1 }', {
-                    'type': 'icon_set', 'icon_style': '3_symbols_circled', 'icons_only': True, 'reverse_icons': True,
-                    'icons': [
-                        {'criteria': '>=', 'type': 'number', 'value': 1},
-                        {'criteria': '<=', 'type': 'number', 'value': 0},
-                        {'criteria': '<',  'type': 'number', 'value': -1}]
-                    })
+            if len(warnings) > 0:
+                warnings = pd.pivot_table(pd.concat(warnings), index=['CATEGORIA', 'MESE'])
                 
-                excelFile.sheets[sheetName].conditional_format(f'D2:D{len(monthly_df) -1}', {
-                    'type': '3_color_scale', 'min_color': "#99BC85",'mid_color': "white", 'mid_type': 'num', 'mid_value': 0, 'max_color': "#C83E3E"})
-                excelFile.sheets[sheetName].conditional_format(f'F2:F{len(monthly_df) - 1}', {
-                    'type': '3_color_scale', 'min_color': "#99BC85",'mid_color': "white", 'mid_type': 'num',  'mid_value': 0, 'max_color': "#C83E3E"})
-            excelFile.sheets[sheetName].autofit()
+                ranks = warnings[['Δ BUDGET (%)']].groupby('CATEGORIA').sum().sort_values(by = 'Δ BUDGET (%)', ascending=False).index.to_list()
+                warnings['ranks'] = [ranks.index(cat[0]) for cat in warnings.index]
+                warnings = warnings.sort_values(by = ['ranks', 'Δ BUDGET (%)', 'MESE'], ascending = [True, False, False]).drop(columns = 'ranks')
+    
+                warnings.to_excel(excelFile, sheet_name = 'Warnings', freeze_panes = (1,1)) 
+                excelFile.sheets['Warnings'].set_column('A:A', cell_format = index_fmt)
+                excelFile.sheets['Warnings'].set_column('C:C', cell_format = perc_fmt)
+                excelFile.sheets['Warnings'].set_row(0, None, header_format)
+                excelFile.sheets['Warnings'].conditional_format(f'C2:C{len(warnings) + 1}', {
+                        'type': '2_color_scale', 'min_color': '#E6A8A8', 'max_color': '#C83E3E'})
+                excelFile.sheets['Warnings'].autofit()
+
+            for month, monthly_df in monthly_dfs.items():
+
+                # Save the sheet
+                sheetName = month.strftime('%B %Y')
+                monthly_df.to_excel(excelFile, sheet_name = sheetName, index = True,  freeze_panes = (1,1))
+
+                # Graphical settings
+                excelFile.sheets[sheetName].set_row(0, None, header_format)
+                excelFile.sheets[sheetName].set_column('A:A', cell_format = index_fmt)
+                excelFile.sheets[sheetName].set_column('B:B', cell_format = euro_fmt) #  width = 8, 
+                excelFile.sheets[sheetName].set_column('C:C', cell_format = perc_fmt) #  width = 5,
+                excelFile.sheets[sheetName].set_column(first_col = len(partial_df.columns), last_col =len(partial_df.columns), 
+                                                    width = 60, cell_format = excelFile.book.add_format({"align": "left", 'font_size': 16}))
+                
+                excelFile.sheets[sheetName].conditional_format(f'B2:B{len(monthly_df) - 1}', {
+                        'type': '2_color_scale', 'min_color': '#C83E3E', 'max_color': '#E6A8A8'})
+
+                if feature == 'CATEGORIA':
+                    excelFile.sheets[sheetName].set_column('D:D', width = 8, cell_format = euro_fmt)
+                    excelFile.sheets[sheetName].set_column('F:F', width = 12, cell_format = perc_fmt)
+                    excelFile.sheets[sheetName].set_column('E:E', width = 2)
+                    excelFile.sheets[sheetName].set_column('G:G', width = 2)
+
+                    excelFile.sheets[sheetName].conditional_format(f'C2:C{len(monthly_df) - 1}', {
+                        "type": "data_bar", "min_type": "num", "max_type": "num", "min_value": 0, "max_value": 1, 
+                        "bar_color": "#CFD8DC", "bar_solid": True, "bar_only": False, "bar_direction":'right'})
+                    excelFile.sheets[sheetName].conditional_format(f'E2:E{len(monthly_df) - 1 }', {
+                        'type': 'icon_set', 'icon_style': '3_symbols_circled', 'icons_only': True, 'reverse_icons': True,
+                        'icons': [
+                            {'criteria': '>=', 'type': 'number', 'value': 1},
+                            {'criteria': '<=', 'type': 'number', 'value': 0},
+                            {'criteria': '<',  'type': 'number', 'value': -1}]
+                        })
+                    
+                    excelFile.sheets[sheetName].conditional_format(f'D2:D{len(monthly_df) -1}', {
+                        'type': '3_color_scale', 'min_color': "#99BC85",'mid_color': "white", 'mid_type': 'num', 'mid_value': 0, 'max_color': "#C83E3E"})
+                    excelFile.sheets[sheetName].conditional_format(f'F2:F{len(monthly_df) - 1}', {
+                        'type': '3_color_scale', 'min_color': "#99BC85",'mid_color': "white", 'mid_type': 'num',  'mid_value': 0, 'max_color': "#C83E3E"})
+                excelFile.sheets[sheetName].autofit()
+            
+            if feature == 'CATEGORIA':
+                mapping = dict(zip(map(str, monthly_dfs.keys()), list(excelFile.sheets.keys())[2:]))
+                for idk, item in enumerate(warnings.index.get_level_values(1).astype(str)):
+                    excelFile.sheets['Warnings'].write_url(idk + 1, 1, f"internal:'{mapping[item]}'!A1", string = item, 
+                                                        cell_format = excelFile.book.add_format({'font_size': 16, 'font_color': 'black'}))
+    except PermissionError:
+        raise PermissionError("Close the spreadsheet...")
         
-        if feature == 'CATEGORIA':
-            mapping = dict(zip(map(str, monthly_dfs.keys()), list(excelFile.sheets.keys())[2:]))
-            for idk, item in enumerate(warnings.index.get_level_values(1).astype(str)):
-                excelFile.sheets['Warnings'].write_url(idk + 1, 1, f"internal:'{mapping[item]}'!A1", string = item, 
-                                                    cell_format = excelFile.book.add_format({'font_size': 16, 'font_color': 'black'}))
     if verbose:
         print(groupedByCategory)
 

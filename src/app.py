@@ -49,9 +49,10 @@ if __name__ == '__main__':
     stats.monthly_stats(df, outputFolder = outputFolder)
 
     # COnsider only the selected period
-    cutOff = datetime64('today', 'M')  - timedelta64(reporting_period, 'M')
-    df = df[df['VALUTA'].dt.to_period('M') > str(cutOff)]
-    print(f"REPORTING PERIOD: {reporting_period} months\nCUTOFF: {cutOff} ({df['VALUTA'].iloc[-1].date()} <--> {df['VALUTA'].iloc[0].date()})\n")
+    if reporting_period > 0:
+        cutOff = datetime64('today', 'M')  - timedelta64(reporting_period, 'M')
+        df = df[df['VALUTA'].dt.to_period('M') > str(cutOff)]
+        print(f"REPORTING PERIOD: {reporting_period} months\nCUTOFF: {cutOff} ({df['VALUTA'].iloc[-1].date()} <--> {df['VALUTA'].iloc[0].date()})\n")
 
     # Compute income stats
     stats.compute_incomes(df, outputFolder = outputFolder)
