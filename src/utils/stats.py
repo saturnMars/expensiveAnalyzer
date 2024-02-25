@@ -62,6 +62,39 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
         except KeyError as missingBudgetCategory:
             raise Exception(f'\n{missingBudgetCategory} is not in the budget! Please include it in the budget file.\n')
 
+    # Monthly stats
+    warnings = []
+    monthly_dfs = dict()
+    for month in expensivesByMonth.index.get_level_values(0).unique():
+        partial_df = expensivesByMonth.loc[month, :].sort_values(by = 'IMPORTO', ascending = True) 
+
+        # Add new columns 
+        partial_df.insert(loc = 1, column = '%', value = (partial_df['IMPORTO'] / partial_df['IMPORTO'].sum()).round(2))
+
+        # Delta from budget
+        if feature == 'CATEGORIA':
+            partial_df.insert(loc = 2, column = 'Δ BUDGET', value = partial_df.apply(
+                lambda df_row: round(-df_row['IMPORTO'] - budget[df_row.name], 0), axis = 1))
+            partial_df.insert(loc = 3, column = 'Δ BUDGET (%)', value = partial_df.apply(
+                lambda df_row: df_row['Δ BUDGET'] / budget[df_row.name] if budget[df_row.name] > 0 else 9.99, axis = 1))
+
+            partial_df.loc[''] = None
+            partial_df.loc['_TOTAL'] = {'IMPORTO': partial_df['IMPORTO'].sum(), 'Δ BUDGET' : partial_df['Δ BUDGET'].sum(),
+                                        'Δ BUDGET (%)': partial_df['Δ BUDGET'].sum() / np.sum(list(budget.values()))}
+            
+            partial_df.insert(loc = 3, column = "!", value = partial_df['Δ BUDGET'].map(lambda x: 1 if x >= 50 else 0 if x >=0 else -1))
+            partial_df.loc[['_TOTAL', ''], '!'] = None
+
+            monthlyWarnings = partial_df.loc[partial_df['!'] == 1, ['Δ BUDGET (%)']]
+            monthlyWarnings.insert(loc = 0, column = 'MESE', value = month)
+
+            if 'Investments' in monthlyWarnings.index:
+                monthlyWarnings = monthlyWarnings.drop(index = 'Investments')
+            monthlyWarnings = monthlyWarnings.reset_index()
+            
+            warnings.append(monthlyWarnings)
+        monthly_dfs[month] = partial_df
+
     # Save the excel file
     fileName = 'expensives' + ('byAbiCode' if feature == "CAUSALE ABI" else '') + '.xlsx'
     with pd.ExcelWriter(path.join(outputFolder, fileName), engine = 'xlsxwriter') as excelFile:
@@ -69,57 +102,50 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
 
         euro_fmt = excelFile.book.add_format({'num_format': '#,##0 €', 'font_size': 16})
         perc_fmt = excelFile.book.add_format({"num_format": "0%", 'font_size': 16})
+        index_fmt = excelFile.book.add_format({"align": "left", 'bold': True, 'font_size': 16})
         header_format = excelFile.book.add_format({'bg_color': '#3D3B40', 'font_color': 'white', 'bold': False, 'valign': 'center', 'font_size': 20})
         excelFile.book.formats[0].set_font_size(16)
         excelFile.book.formats[0].set_align('vcenter')
-        excelFile.sheets['Overview'].set_column('D:E', width = 8, cell_format = euro_fmt)
-        excelFile.sheets['Overview'].set_column('F:F', width = 12, cell_format = perc_fmt)
-        excelFile.sheets['Overview'].set_column('A:A', width = 20)
+        excelFile.book.formats[0].set_align('center')
+        excelFile.sheets['Overview'].set_row(0, None, header_format)
+        excelFile.sheets['Overview'].set_column('D:E', cell_format = euro_fmt)
+        excelFile.sheets['Overview'].set_column('F:F', cell_format = perc_fmt) #  width = 12, 
+        excelFile.sheets['Overview'].set_column('A:A', cell_format = index_fmt)
+        #excelFile.sheets['Overview'].set_column('A:A', width = 20)
         excelFile.sheets['Overview'].conditional_format('E1:E999', {
             'type': '3_color_scale', 'min_color': "#99BC85",'mid_color': "white", 'mid_type': 'num',  'mid_value': 0, 'max_color': "#C83E3E"})
         excelFile.sheets['Overview'].conditional_format('F1:F999', {
            'type': '3_color_scale', 'min_color': "#99BC85",'mid_color': "white", 'mid_type': 'num',  'mid_value': 0, 'max_color': "#C83E3E"})
-        excelFile.sheets['Overview'].set_row(0, None, header_format)
         excelFile.sheets['Overview'].conditional_format('D1:D999', {
                     'type': '2_color_scale', 'min_color': '#C83E3E', 'max_color': '#E6A8A8'})
         excelFile.sheets['Overview'].autofit()
 
-        # Monthy stats
-        warnings = []
-        for month in expensivesByMonth.index.get_level_values(0).unique():
-            partial_df = expensivesByMonth.loc[month, :].sort_values(by = 'IMPORTO', ascending = True) 
+        if len(warnings) > 0:
+            warnings = pd.concat(warnings).reset_index(drop = True).sort_values(by = ['Δ BUDGET (%)', 'CATEGORIA', 'MESE'], ascending=False)
+            warnings.to_excel(excelFile, index = False, sheet_name = 'Warnings', freeze_panes = (1,1))
 
-            # Add new columns 
-            partial_df.insert(loc = 1, column = '%', value = (partial_df['IMPORTO'] / partial_df['IMPORTO'].sum()).round(2))
+            excelFile.sheets['Warnings'].set_column('A:A', cell_format = index_fmt)
+            excelFile.sheets['Warnings'].set_column('C:C', cell_format = perc_fmt)
+            excelFile.sheets['Warnings'].set_row(0, None, header_format)
+            excelFile.sheets['Warnings'].conditional_format(f'C1:C{len(warnings)}', {
+                    'type': '2_color_scale', 'min_color': '#C83E3E', 'max_color': '#E6A8A8'})
+            excelFile.sheets['Warnings'].autofit()
 
-            # Delta from budget
-            if feature == 'CATEGORIA':
-                partial_df.insert(loc = 2, column = 'Δ BUDGET', value = partial_df.apply(
-                    lambda df_row: round(-df_row['IMPORTO'] - budget[df_row.name], 0), axis = 1))
-                partial_df.insert(loc = 3, column = 'Δ BUDGET (%)', value = partial_df.apply(
-                    lambda df_row: df_row['Δ BUDGET'] / budget[df_row.name] if budget[df_row.name] > 0 else 9.99, axis = 1))
-        
-                partial_df.loc['_TOTAL'] = {'IMPORTO': partial_df['IMPORTO'].sum(), 'Δ BUDGET' : partial_df['Δ BUDGET'].sum(),
-                                            'Δ BUDGET (%)': partial_df['Δ BUDGET'].sum() / np.sum(list(budget.values()))}
-                
-                partial_df.insert(loc = 3, column = "!", value = partial_df['Δ BUDGET'].map(lambda x: 1 if x >= 50 else 0 if x >=0 else -1))
-
-                monthlyWarnings = partial_df.loc[partial_df['!'] == 1, ['Δ BUDGET (%)']]
-                monthlyWarnings.insert(loc = 0, column = 'MESE', value = month)
-                monthlyWarnings = monthlyWarnings.drop(index = ['_TOTAL', 'Investments']).reset_index()
-                warnings.append(monthlyWarnings)
+        for month, monthly_df in monthly_dfs.items():
 
             # Save the sheet
             sheetName = month.strftime('%B %Y')
-            partial_df.to_excel(excelFile, sheet_name = sheetName, index = True,  freeze_panes = (1,1))
+            monthly_df.to_excel(excelFile, sheet_name = sheetName, index = True,  freeze_panes = (1,1))
 
             # Graphical settings
             excelFile.sheets[sheetName].set_row(0, None, header_format)
-            excelFile.sheets[sheetName].set_column('B:B', width = 8, cell_format = euro_fmt)
-            excelFile.sheets[sheetName].set_column('C:C', width = 5, cell_format = perc_fmt)
-            excelFile.sheets[sheetName].set_column('A:A', width = 20)
-            excelFile.sheets[sheetName].set_column(first_col = len(partial_df.columns), last_col =len(partial_df.columns), width = 70)
-            excelFile.sheets[sheetName].conditional_format(0, 1, len(partial_df) -1, 1, {
+            excelFile.sheets[sheetName].set_column('A:A', cell_format = index_fmt)
+            excelFile.sheets[sheetName].set_column('B:B', cell_format = euro_fmt) #  width = 8, 
+            excelFile.sheets[sheetName].set_column('C:C', cell_format = perc_fmt) #  width = 5,
+            excelFile.sheets[sheetName].set_column(first_col = len(partial_df.columns), last_col =len(partial_df.columns), 
+                                                   width = 60, cell_format = excelFile.book.add_format({"align": "left", 'font_size': 16}))
+            
+            excelFile.sheets[sheetName].conditional_format(f'B2:B{len(monthly_df) - 1}', {
                     'type': '2_color_scale', 'min_color': '#C83E3E', 'max_color': '#E6A8A8'})
 
             if feature == 'CATEGORIA':
@@ -128,10 +154,10 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
                 excelFile.sheets[sheetName].set_column('E:E', width = 2)
                 excelFile.sheets[sheetName].set_column('G:G', width = 2)
 
-                excelFile.sheets[sheetName].conditional_format('C1:C999', {
+                excelFile.sheets[sheetName].conditional_format(f'C2:C{len(monthly_df) - 1}', {
                     "type": "data_bar", "min_type": "num", "max_type": "num", "min_value": 0, "max_value": 1, 
                     "bar_color": "#CFD8DC", "bar_solid": True, "bar_only": False, "bar_direction":'right'})
-                excelFile.sheets[sheetName].conditional_format('E1:E999', {
+                excelFile.sheets[sheetName].conditional_format(f'E2:E{len(monthly_df) - 1 }', {
                     'type': 'icon_set', 'icon_style': '3_symbols_circled', 'icons_only': True, 'reverse_icons': True,
                     'icons': [
                         {'criteria': '>=', 'type': 'number', 'value': 1},
@@ -139,21 +165,11 @@ def groupExpensives(df, outputFolder, feature = "CAUSALE ABI", include_incomes =
                         {'criteria': '<',  'type': 'number', 'value': -1}]
                     })
                 
-                excelFile.sheets[sheetName].conditional_format(f'D1:D{len(partial_df)}', {
+                excelFile.sheets[sheetName].conditional_format(f'D2:D{len(monthly_df) -1}', {
                     'type': '3_color_scale', 'min_color': "#99BC85",'mid_color': "white", 'mid_type': 'num', 'mid_value': 0, 'max_color': "#C83E3E"})
-                excelFile.sheets[sheetName].conditional_format(f'F1:F{len(partial_df)}', {
+                excelFile.sheets[sheetName].conditional_format(f'F2:F{len(monthly_df) - 1}', {
                     'type': '3_color_scale', 'min_color': "#99BC85",'mid_color': "white", 'mid_type': 'num',  'mid_value': 0, 'max_color': "#C83E3E"})
-                excelFile.sheets[sheetName].autofit()
-
-        if len(warnings) > 0:
-            warnings = pd.concat(warnings).reset_index(drop = True).sort_values(by = ['Δ BUDGET (%)', 'CATEGORIA', 'MESE'], ascending=False)
-            warnings.to_excel(excelFile, index = False, sheet_name = 'Warnings', freeze_panes = (1,1))
-
-            excelFile.sheets['Warnings'].set_column('C:C', cell_format = perc_fmt)
-            excelFile.sheets['Warnings'].set_row(0, None, header_format)
-            excelFile.sheets['Warnings'].conditional_format(f'C1:C{len(warnings)}', {
-                    'type': '2_color_scale', 'min_color': '#C83E3E', 'max_color': '#E6A8A8'})
-            excelFile.sheets['Warnings'].autofit()
+            excelFile.sheets[sheetName].autofit()
 
     if verbose:
         print(groupedByCategory)
