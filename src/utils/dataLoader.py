@@ -47,6 +47,7 @@ def loadTransactions(projectFolder):
 
         # Load the excel file
         main_df = pd.read_excel(path.join(dataFolder, outputfileName), sheet_name='Transactions') 
+        main_df['ID'] = main_df['DESCRIZIONE OPERAZIONE'].map(lambda desc: md5(desc.encode('UTF-8')).hexdigest())
 
         # Upload the categories
         main_df = addExpensiveCategories(main_df, folderData = path.join(projectFolder, 'taxonomies'))
@@ -82,7 +83,7 @@ def loadTransactions(projectFolder):
         df.drop(columns = ['ID']).to_excel(excelFile, index = False, sheet_name = 'Transactions', freeze_panes = (1,0))
 
         # IDs
-        columns = ['ID', 'VALUTA', 'CATEGORIA', 'DESCRIZIONE OPERAZIONE']
+        columns = ['ID', 'VALUTA', 'CATEGORIA','IMPORTO' ,'DESCRIZIONE OPERAZIONE']
         df[columns].to_excel(excelFile, index = False, sheet_name = 'IDs', freeze_panes = (1, 0))
         
         # Graphical settings
