@@ -57,9 +57,6 @@ def loadTransactions(projectFolder):
 
     if len(df) == 0:
         raise Exception('No data! Neither in the DATA folder nor in the DOWNLOAD folder.\n')
-
-    # Generate the ID (M5 Hash) for each transaction
-    df['ID'] = df['DESCRIZIONE OPERAZIONE'].map(lambda desc: md5(desc.encode('UTF-8')).hexdigest())
     
     # Sort the new dataframe
     df = df.sort_values(by = ['VALUTA', 'DATA'], ascending = False)
@@ -140,6 +137,9 @@ def importTransactions(projectFolder):
     # Parse the data
     df['DATA'] = pd.to_datetime(df['DATA'], dayfirst=True)
     df['VALUTA'] = pd.to_datetime(df['VALUTA'], dayfirst=True)
+    
+    # Generate the ID (M5 Hash) for each transaction
+    df['ID'] = df['DESCRIZIONE OPERAZIONE'].map(lambda desc: md5(desc.encode('UTF-8')).hexdigest())
 
     # Modify the numerical representation
     for col in ['AVERE', 'DARE']:
