@@ -133,6 +133,8 @@ def importTransactions(projectFolder):
 
     # Drop the invalid entries
     df = df.dropna(subset = 'CAUSALE ABI')
+    df = df.dropna(axis=1, how='all')
+    df = df.drop(columns= [col for col in df.columns if 'unnamed' in col.lower()])
 
     # Parse the data
     df['DATA'] = pd.to_datetime(df['DATA'], dayfirst=True)
@@ -146,7 +148,8 @@ def importTransactions(projectFolder):
         cond = ~df[col].isna()
         if cond.any():
             df.loc[cond, col] = df.loc[cond, col].str.replace('.', '').str.replace(',', '.').astype('float')
-    df['CAUSALE ABI'] = df['CAUSALE ABI'].astype(pd.Int32Dtype())
+
+    #df['CAUSALE ABI'] = df['CAUSALE ABI'].astype(pd.Int32Dtype())
 
     # Replace 
     df['IMPORTO'] = df.apply(lambda df_row: df_row['AVERE'] if pd.isna(df_row['DARE']) else -df_row['DARE'], axis = 1)
@@ -156,7 +159,7 @@ def importTransactions(projectFolder):
     df['DESC'] = df['DESC'].map(cleanIncomeDescription)
     
     # Remove the last empty column
-    df = df.drop(columns = ['Unnamed: 4', 'Unnamed: 7', 'DARE', 'AVERE'])
+    df = df.drop(columns = ['DARE', 'AVERE'])
 
     # Map the ABI codes
     df = mapAbiCodes(df, folderData = path.join(projectFolder, 'taxonomies'))
