@@ -6,7 +6,7 @@ from win11toast import toast
 from configparser import ConfigParser
 from numpy import datetime64, timedelta64
 from threading import Thread
-from multiprocessing import Process, Pool
+from multiprocessing import Process
 
 # LOCAL IMPORTS
 from utils import dataLoader, stats
@@ -48,10 +48,14 @@ if __name__ == '__main__':
     # Compute monthly stats
     Thread(target = stats.monthly_stats, args=(df, outputFolder)).start()
 
-    # COnsider only the selected period
+    # Consider only the selected period
     if reporting_period > 0:
         cutOff = datetime64('today', 'M')  - timedelta64(reporting_period, 'M')
         df = df[df['VALUTA'].dt.to_period('M') > str(cutOff)]
+
+        if df.empty:
+            print(f"NO TRANSACTION IN THE LAST {reporting_period} MONTHS")
+            exit()
         print(f"REPORTING PERIOD: {reporting_period} months\nCUTOFF: {cutOff} ({df['VALUTA'].iloc[-1].date()} <--> {df['VALUTA'].iloc[0].date()})\n")
 
     # Compute income stats

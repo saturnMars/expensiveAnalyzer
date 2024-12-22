@@ -125,7 +125,7 @@ def importTransactions(projectFolder):
     dfs = []
     for fileName in folderFiles:
         if fileName.endswith('.csv'):
-          dfs.append(pd.read_csv(path.join(dataFolder, fileName), sep = ';', skipfooter = 3, parse_dates=['DATA', 'VALUTA'],  engine='python', dayfirst=True))
+          dfs.append(pd.read_csv(path.join(dataFolder, fileName), sep = ';', skipfooter = 1, parse_dates=['DATA', 'VALUTA'],  engine='python', dayfirst=True))
     
     if len(dfs) == 0: 
         return pd.DataFrame()

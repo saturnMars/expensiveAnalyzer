@@ -1,3 +1,4 @@
+from configparser import ConfigParser
 from os import path
 from collections import Counter
 import pandas as pd
@@ -6,9 +7,6 @@ import numpy as np
 # LOCAL IMPORTS
 from utils import graphs
 from utils.dataLoader import loadBudget
-
-# 01 January 2024
-CUTOFF_CASH_AMOUNT = 2833.96 
 
 def group_expensive(df, outputFolder, feature = "CAUSALE ABI", include_incomes = False): 
     
@@ -258,6 +256,17 @@ def compute_incomes(df, outputFolder):
             sheet.conditional_format(value_col, {'type': '2_color_scale', 'min_color': '#E1F0DA', 'max_color': '#99BC85'})
             sheet.autofit()
 
+def cutoff_period():
+
+    # Read config file
+    config = ConfigParser()
+    config.read(path.join('src','config.ini'))
+
+    # Read the cutoff date and cash amount
+    cutoff_date = pd.to_datetime(config.get('CUTOFF', 'date'))
+    cutoff_cashAmount = float(config.get('CUTOFF', 'cash_amount'))
+
+    return cutoff_date, cutoff_cashAmount
 
 def monthly_stats(df, outputFolder):
 
@@ -269,11 +278,19 @@ def monthly_stats(df, outputFolder):
     df['MACRO-CATEGORIA'] = df['IMPORTO'].map(lambda value: 'ENTRATE' if value > 0 else 'USCITE')
     df.loc[df['CATEGORIA'] == 'Investments', 'MACRO-CATEGORIA'] = 'INVESTIMENTI'
 
-    # Add liquidità
+    # Sort the dataframe
     df = df.sort_values(by = 'DATA').reset_index(drop = True)
-    cuttoff_transaction = df[df['DATA'] <= '2023-12-31'].iloc[-1].name
-    df.loc[cuttoff_transaction, "LIQUIDITA"] = CUTOFF_CASH_AMOUNT
-    df.loc[cuttoff_transaction +1:, "LIQUIDITA"] = df.loc[cuttoff_transaction +1:, 'IMPORTO'].cumsum() + CUTOFF_CASH_AMOUNT
+
+    # Get the cutoff date and amount
+    cutoff_date, cutoff_amount = cutoff_period()
+    actual_cutoff_date = df['DATA'].iloc[0]
+    assert np.abs(actual_cutoff_date - cutoff_date) < np.timedelta64(7, 'D'), f"The cutoff date ({cutoff_date}) is not correct! First date found: {actual_cutoff_date}"
+    
+    # Add the cash amount
+    cutoff_transaction = df[df['DATA'] <= actual_cutoff_date].iloc[-1].name
+    df.loc[cutoff_transaction:, "LIQUIDITA"] = cutoff_amount + df.loc[cutoff_transaction:, 'IMPORTO'].cumsum()
+
+    #df.to_excel(path.join(outputFolder, 'tmp.xlsx'))
 
     # Group the months
     groupedDf = df[['MESE', 'IMPORTO', 'MACRO-CATEGORIA']].groupby(by = ['MESE', 'MACRO-CATEGORIA']).sum() #, as_index = False
